@@ -92,6 +92,39 @@ func paneHasPiOnTTY(target string) bool {
 	return false
 }
 
+// ttyBaseName strips the /dev prefix from a tmux pane_tty so it matches the
+// tty column reported by ps.
+func ttyBaseName(tty string) string {
+	return strings.TrimPrefix(strings.TrimSpace(tty), "/dev/")
+}
+
+// piAgentTTYs scans all processes once and returns the set of ttys that have a
+// pi agent running on them.
+func piAgentTTYs() map[string]bool {
+	out, err := exec.Command("ps", "-e", "-o", "tty=,command=").Output()
+	if err != nil {
+		return nil
+	}
+	return collectPiTTYs(string(out))
+}
+
+func collectPiTTYs(psOutput string) map[string]bool {
+	ttys := make(map[string]bool)
+	for _, line := range strings.Split(psOutput, "\n") {
+		trimmed := strings.TrimLeft(line, " ")
+		if idx := strings.IndexByte(trimmed, ' '); idx > 0 {
+			tty := trimmed[:idx]
+			if tty == "" || tty == "?" || tty == "??" {
+				continue
+			}
+			if isPiProcessLine(trimmed[idx+1:]) {
+				ttys[tty] = true
+			}
+		}
+	}
+	return ttys
+}
+
 func isPiProcessLine(line string) bool {
 	line = strings.TrimSpace(line)
 	if line == "" {

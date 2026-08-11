@@ -14,12 +14,32 @@ func TestIsPiCommand(t *testing.T) {
 	}
 }
 
-func TestNeedsDeepPiCheck(t *testing.T) {
-	if !needsDeepPiCheck("bash") {
-		t.Fatal("bash should need deep check")
+func TestTtyBaseName(t *testing.T) {
+	cases := map[string]string{
+		"/dev/ttys004": "ttys004",
+		"ttys004":      "ttys004",
+		"/dev/pts/0":   "pts/0",
+		"  /dev/tty1 ": "tty1",
 	}
-	if needsDeepPiCheck("node") {
-		t.Fatal("node should not need deep check")
+	for in, want := range cases {
+		if got := ttyBaseName(in); got != want {
+			t.Fatalf("ttyBaseName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCollectPiTTYs(t *testing.T) {
+	out := "ttys001 /bin/ls\n" +
+		"ttys004 /usr/local/bin/pi\n" +
+		"ttys005 nu\n" +
+		"?? /usr/bin/foo\n" +
+		"ttys006 /nix/store/abc-pi/bin/runner\n"
+	got := collectPiTTYs(out)
+	if !got["ttys004"] {
+		t.Fatal("expected ttys004 (bare pi) to be flagged")
+	}
+	if got["ttys001"] || got["ttys005"] || got["ttys006"] {
+		t.Fatalf("unexpected pi ttys: %v", got)
 	}
 }
 

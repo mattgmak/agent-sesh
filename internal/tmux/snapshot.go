@@ -49,6 +49,9 @@ func refreshSnapshot() (*Snapshot, error) {
 		return nil, err
 	}
 
+	// One `ps -e` scan covering all pane ttys, instead of one ps per pane.
+	piTTYs := piAgentTTYs()
+
 	panes := make(map[string]PaneInfo)
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)
@@ -72,7 +75,8 @@ func refreshSnapshot() (*Snapshot, error) {
 			CurrentPath:    fields[7],
 			Exists:         true,
 		}
-		info.HasPiAgent = detectPiAgent(info)
+		info.HasPiAgent = isPiCommand(info.CurrentCommand, info.StartCommand) ||
+			piTTYs[ttyBaseName(info.TTY)]
 		panes[target] = info
 	}
 
@@ -87,32 +91,15 @@ func detectPiAgent(info PaneInfo) bool {
 	if isPiCommand(info.CurrentCommand, info.StartCommand) {
 		return true
 	}
-	if !needsDeepPiCheck(info.CurrentCommand) {
-		return false
-	}
+	// The pane's foreground command may be the agent runtime (e.g. node for
+	// pi) rather than `pi` itself, and the start command may be wrapped by
+	// reattach-to-user-namespace or a login shell. The tty scan is the ground
+	// truth: check every pane whose command doesn't already prove pi.
 	return paneHasPiOnTTY(info.Target)
 }
 
 func isPiCommand(current, start string) bool {
 	return isPiProcessLine(current) || isPiProcessLine(start)
-}
-
-func needsDeepPiCheck(current string) bool {
-	current = strings.TrimSpace(current)
-	if current == "" {
-		return true
-	}
-	base := current
-	if idx := strings.LastIndex(current, "/"); idx >= 0 {
-		base = current[idx+1:]
-	}
-	base = strings.Fields(base)[0]
-	switch base {
-	case "bash", "zsh", "sh", "fish", "nu", "dash", "ksh", "tcsh":
-		return true
-	default:
-		return false
-	}
 }
 
 // HasPane reports whether target exists in the snapshot.
