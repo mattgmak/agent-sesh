@@ -167,19 +167,37 @@ func layoutMetaChunks(status registry.Status, chunks []metaChunk, width int) []s
 	}
 
 	for _, p := range pieces {
-		// Chunks wider than the line always get their own row at the full width budget.
-		if p.width > width {
-			flush()
-			lines = append(lines, renderExclusive(p))
-			continue
-		}
-
 		need := p.width
 		if len(current) > 0 {
 			need = used + sepWidth + p.width
 		}
+
 		if len(current) > 0 && need > width {
+			// The chunk does not fit on the current line. If the line so far
+			// only holds the status marker, keep it glued to the leading chunk
+			// (the session name) and truncate that chunk to the remaining
+			// budget. Truncating to the full width here would overflow the line
+			// once the status icon and its space are prepended, so the terminal
+			// wraps it.
+			if len(current) == 1 && current[0].isStatus {
+				if remaining := width - used - sepWidth; remaining >= 1 {
+					content := renderAtWidth(p, remaining)
+					if lipgloss.Width(content) > remaining {
+						content = truncateANSI(content, remaining-1) + "…"
+					}
+					used += sepWidth
+					current = append(current, piece{content: ensureResetSuffix(content), width: lipgloss.Width(content), chunk: p.chunk, isStatus: p.isStatus})
+					used += lipgloss.Width(content)
+					continue
+				}
+			}
 			flush()
+		}
+
+		// Chunks wider than the line always get their own row at the full width budget.
+		if p.width > width {
+			lines = append(lines, renderExclusive(p))
+			continue
 		}
 
 		if len(current) > 0 {

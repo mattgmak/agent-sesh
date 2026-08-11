@@ -93,6 +93,66 @@ func TestLayoutMetaChunksLongBranchUsesFullLineWidth(t *testing.T) {
 	}
 }
 
+// TestLayoutMetaChunksStatusGluedToLongSessionName guards the truncation of a
+// session name too wide for the line: the status icon and its trailing space
+// stay on the same line as the name, so the name's truncation budget must be
+// the line width minus the status chunk and separator — otherwise the combined
+// line overflows and the terminal wraps it.
+func TestLayoutMetaChunksStatusGluedToLongSessionName(t *testing.T) {
+	session := registry.Session{
+		TmuxSession: "tcm_mattmak_tech_1013_replace_program_screen_with_lifestyle_redesign",
+		Status:      registry.StatusWorking,
+		Agent:       "pi",
+	}
+
+	for _, width := range []int{30, 40, 56, 58, 60} {
+		lines := layoutMetaChunks(session.Status, buildMetaChunks(session), width)
+		if len(lines) == 0 {
+			t.Fatalf("width %d: expected at least one meta line", width)
+		}
+		first := lines[0]
+		if !strings.Contains(first, iconWorking) {
+			t.Fatalf("width %d: expected status icon on first line, got %q", width, first)
+		}
+		if !strings.Contains(first, iconSession) {
+			t.Fatalf("width %d: expected session icon on first line, got %q", width, first)
+		}
+		if w := lipgloss.Width(first); w > width {
+			t.Fatalf("width %d: first line wider than budget (%d): %q", width, w, first)
+		}
+		if !strings.Contains(first, "…") {
+			t.Fatalf("width %d: expected truncated session name, got %q", width, first)
+		}
+	}
+}
+
+// TestLayoutMetaChunksLongSessionNameNoWrap renders the entry through the full
+// list pipeline (gutter + gap) and asserts no line exceeds the frame width,
+// which is what a terminal would wrap.
+func TestLayoutMetaChunksLongSessionNameNoWrap(t *testing.T) {
+	session := registry.Session{
+		TmuxSession: "tcm_mattmak_tech_1013_replace_program_screen_with_lifestyle_redesign",
+		TmuxWindow:  "1",
+		TmuxPane:    "1",
+		Branch:      "mattmak/tech-1013-replace-program-screen-with-lifestyle-redesign",
+		ToolName:    "ctx_shell",
+		CWD:         "/Users/mattgmak/code/tcm/tcm.mattmak-tech-1013-replace-program-screen-with-lifestyle-redesign",
+		Status:      registry.StatusWorking,
+		Agent:       "pi",
+	}
+
+	for _, lineWidth := range []int{40, 56, 58, 60} {
+		bodyWidth := lineWidth - 2
+		entryLines := formatSessionEntry(session, bodyWidth)
+		for i, line := range entryLines {
+			if w := lipgloss.Width(line) + 2; w > lineWidth {
+				t.Fatalf("lineWidth %d: entry line %d is %d wide with gutter, wraps: %q",
+					lineWidth, i, w, line)
+			}
+		}
+	}
+}
+
 func TestFormatSessionEntryMultilinePromptSingleLine(t *testing.T) {
 	session := registry.Session{
 		TmuxSession: "demo",
