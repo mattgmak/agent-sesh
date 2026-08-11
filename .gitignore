@@ -1,0 +1,6 @@
+# Binaries
+/agent-sesh
+/result
+
+# Scratch / lint caches
+claudetmp_capture/
