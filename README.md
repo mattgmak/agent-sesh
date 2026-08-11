@@ -108,6 +108,31 @@ prefix-a  →  display-popup  →  agent-sesh pick
 
 ## Dev
 
+Shell environment is managed with [devenv](https://devenv.sh) — Go toolchain,
+tmux, fzf, gopls/delve, golangci-lint, dev scripts, and pre-commit hooks
+(gofmt, govet, gotest, golangci-lint).
+
+```bash
+# one-time: generate devenv.lock (already committed; re-run after devenv.yaml edits)
+devenv update
+
+# enter the dev shell
+devenv shell
+# or with direnv (this build needs the sourced direnvrc, see .envrc):
+direnv allow
+
+# dev scripts inside the shell
+run     # go run ./cmd/agent-sesh
+build   # go install ./cmd/agent-sesh
+fmt     # gofmt -w .
+vet     # go vet ./...
+lint    # golangci-lint run ./...
+test    # go test ./...
+debug   # go run ./cmd/agent-sesh debug ...
+```
+
+Manual (no devenv):
+
 ```bash
 cd agent-sesh
 go mod tidy

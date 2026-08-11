@@ -4,3 +4,11 @@
 
 # Scratch / lint caches
 claudetmp_capture/
+
+# devenv (https://devenv.sh)
+.devenv*
+*.devenv
+.pre-commit-config.yaml
+
+# Agent scratch
+claudetmp/
