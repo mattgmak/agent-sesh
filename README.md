@@ -183,7 +183,9 @@ agent-sesh debug pane %0     # one pane snapshot (JSON)
 
 Working today: registry-backed status, tty-based discovery, attach/kill/window, scrollback preview, fzf mode, Home Manager module.
 
-Planned: pin `vendorHash` in the flake, `ctrl-r` rename prompt, status sources for non-pi agents (see [opensessions](https://github.com/Ataraxy-Labs/opensessions) / herdr), a screen recording or demo in this README.
+Versioning: 0.x, tagged on demand (`v0.1.0`). Breaking changes are allowed below 1.0 — see the vibecoded warning above.
+
+Planned: pin `vendorHash` in the flake, `ctrl-r` rename prompt, status sources for non-pi agents (see [opensessions](https://github.com/Ataraxy-Labs/opensessions) / herdr).
 
 ## Related
 
