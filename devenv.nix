@@ -41,17 +41,34 @@
     fmt.exec = "gofmt -w .";
     # agent-sesh debug <subcommand> — inspect registry/tmux state.
     debug.exec = "go run ./cmd/agent-sesh debug \"$@\"";
+    # CI gate: run all checks locally before pushing.
+    check.exec = ''
+      set -euo pipefail
+
+      echo "=== gofmt ==="
+      unformatted=$(gofmt -l .)
+      if [ -n "$unformatted" ]; then
+        echo "Unformatted files:" >&2
+        echo "$unformatted" >&2
+        exit 1
+      fi
+      echo "ok"
+
+      echo "=== govet ==="
+      go vet ./...
+      echo "ok"
+
+      echo "=== golangci-lint ==="
+      golangci-lint run ./...
+      echo "ok"
+
+      echo "=== gotest ==="
+      go test -count=1 ./...
+      echo "ok"
+
+      echo "All checks passed."
+    '';
   };
 
-  # https://devenv.sh/pre-commit-hooks/
-  pre-commit.hooks = {
-    gofmt.enable = true;
-    govet.enable = true;
-    gotest = {
-      enable = true;
-      # Don't reuse the test cache in hooks.
-      settings.flags = "-count=1";
-    };
-    golangci-lint.enable = true;
-  };
+  # Pre-commit hooks moved to .github/workflows/ci.yml (PR CI).
 }
