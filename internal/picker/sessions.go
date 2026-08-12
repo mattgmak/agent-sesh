@@ -29,14 +29,6 @@ func sanitizeOptsFromSnapshot(snap *tmux.Snapshot) registry.SanitizeOptions {
 	}
 }
 
-func defaultSanitizeOpts() registry.SanitizeOptions {
-	snap, err := tmux.GetSnapshot(false)
-	if err != nil {
-		return sanitizeOptsFromSnapshot(nil)
-	}
-	return sanitizeOptsFromSnapshot(snap)
-}
-
 func loadSessionsFast(path string) ([]registry.Session, error) {
 	defer profileStart("loadSessionsFast")()
 	sessions, err := registry.Load(path)
@@ -73,10 +65,6 @@ func loadSessionsFull(path string) ([]registry.Session, error) {
 		return nil, err
 	}
 	return loadSessionsFromSnapshot(path, snap, true)
-}
-
-func loadSessions(path string) ([]registry.Session, error) {
-	return loadSessionsFull(path)
 }
 
 func reloadDiscovery(path string, current []registry.Session) ([]registry.Session, error) {
@@ -171,14 +159,6 @@ func enrichSessionsVisible(sessions []registry.Session, cursor, visible int) []r
 		if needsEnrich(out[i]) {
 			out[i] = enrichSessionFromSnapshot(out[i], snap)
 		}
-	}
-	return out
-}
-
-func enrichSessions(sessions []registry.Session) []registry.Session {
-	out := make([]registry.Session, len(sessions))
-	for i, session := range sessions {
-		out[i] = enrichSession(session)
 	}
 	return out
 }

@@ -41,6 +41,8 @@ func Registry(w io.Writer) error {
 }
 
 // Validate runs sanitize and prints kept/pruned rows.
+//
+//nolint:errcheck
 func Validate(w io.Writer) error {
 	path, err := registry.DefaultPath()
 	if err != nil {
@@ -90,6 +92,8 @@ func Validate(w io.Writer) error {
 }
 
 // Panes prints registry rows alongside live tmux pane state.
+//
+//nolint:errcheck
 func Panes(w io.Writer) error {
 	path, err := registry.DefaultPath()
 	if err != nil {
@@ -129,6 +133,8 @@ func Pane(w io.Writer, target string) error {
 }
 
 // Discover lists panes with pi running that are missing from the registry.
+//
+//nolint:errcheck
 func Discover(w io.Writer) error {
 	path, err := registry.DefaultPath()
 	if err != nil {

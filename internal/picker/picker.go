@@ -30,12 +30,12 @@ const (
 
 // Nerd Font 3 MDI codepoints (from nerd-fonts bin/scripts/lib/i_md.sh).
 const (
-	iconIdle            = "\U000F04B2" // 󰒲 (user choice)
-	iconWorking         = "\U000F09D1" // 󰧑 brain
-	iconToolCall        = "\U000F1322" // 󱌢 hammer-screwdriver (tool metadata)
-	iconStatusToolCall  = "\U000F0996" // 󰦖 progress-clock (tool_call status)
-	iconHalted          = "\U000F0377" // 󰍷 (user choice)
-	iconAwaitingInput   = "\U000F1C7A" // 󱜺 message-question
+	iconIdle           = "\U000F04B2" // 󰒲 (user choice)
+	iconWorking        = "\U000F09D1" // 󰧑 brain
+	iconToolCall       = "\U000F1322" // 󱌢 hammer-screwdriver (tool metadata)
+	iconStatusToolCall = "\U000F0996" // 󰦖 progress-clock (tool_call status)
+	iconHalted         = "\U000F0377" // 󰍷 (user choice)
+	iconAwaitingInput  = "\U000F1C7A" // 󱜺 message-question
 	iconFolder         = "\U000F0256" // 󰉖 folder-outline
 	iconBranch         = "\U000F062C" // 󰘬 source-branch
 	iconAgent          = "\U000F06A9" // 󰚩 robot
@@ -299,14 +299,6 @@ func (m model) splitActive() bool {
 	return splitActive(layoutWidth(m.width), layoutHeight(m.height), len(m.filteredSessions()) > 0)
 }
 
-func (m model) highlightedID() (string, bool) {
-	session, ok := m.selected()
-	if !ok {
-		return "", false
-	}
-	return session.ID, true
-}
-
 func (m *model) schedulePreview() tea.Cmd {
 	return m.schedulePreviewOpts(false)
 }
@@ -345,7 +337,7 @@ func (m *model) schedulePreviewOpts(immediate bool) tea.Cmd {
 		return nil
 	}
 
-	if content, err, _, hit := getPreviewCacheAny(target); hit {
+	if content, _, hit, err := getPreviewCacheAny(target); hit {
 		m.previewName = id
 		m.previewContent = content
 		m.previewErr = err

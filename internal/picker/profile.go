@@ -60,7 +60,7 @@ func initProfile() (string, error) {
 	profileStats = make(map[string]*profileStat)
 	profileMu.Unlock()
 
-	fmt.Fprintf(f, "agent-sesh profile started %s pid=%d\n", time.Now().Format(time.RFC3339), os.Getpid())
+	_, _ = fmt.Fprintf(f, "agent-sesh profile started %s pid=%d\n", time.Now().Format(time.RFC3339), os.Getpid())
 	return path, nil
 }
 
@@ -92,11 +92,11 @@ func writeProfileSummaryLocked() {
 	}
 	sort.Strings(names)
 
-	fmt.Fprintln(profileWriter, "agent-sesh profile: summary")
+	_, _ = fmt.Fprintln(profileWriter, "agent-sesh profile: summary")
 	for _, name := range names {
 		stat := profileStats[name]
 		avg := stat.total / time.Duration(stat.count)
-		fmt.Fprintf(profileWriter, "agent-sesh profile: %-28s count=%4d total=%12s avg=%10s max=%10s\n",
+		_, _ = fmt.Fprintf(profileWriter, "agent-sesh profile: %-28s count=%4d total=%12s avg=%10s max=%10s\n",
 			name, stat.count, stat.total.Round(time.Microsecond), avg.Round(time.Microsecond), stat.max.Round(time.Microsecond))
 	}
 }
@@ -126,7 +126,7 @@ func profileWrite(name, detail string) {
 	if profileWriter == nil {
 		return
 	}
-	fmt.Fprintf(profileWriter, "agent-sesh profile: %s %s\n", name, detail)
+	_, _ = fmt.Fprintf(profileWriter, "agent-sesh profile: %s %s\n", name, detail)
 }
 
 func profileRecord(name string, elapsed time.Duration) {

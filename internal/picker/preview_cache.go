@@ -34,16 +34,16 @@ func getPreviewCache(target, revision string) (content string, err error, ok boo
 	return entry.content, entry.err, true
 }
 
-func getPreviewCacheAny(target string) (content string, err error, revision string, ok bool) {
+func getPreviewCacheAny(target string) (content string, revision string, ok bool, err error) {
 	if target == "" {
-		return "", nil, "", false
+		return "", "", false, nil
 	}
 	raw, ok := previewCache.Load(target)
 	if !ok {
-		return "", nil, "", false
+		return "", "", false, nil
 	}
 	entry := raw.(previewCacheEntry)
-	return entry.content, entry.err, entry.revision, true
+	return entry.content, entry.revision, true, entry.err
 }
 
 func setPreviewCache(target, revision, content string, err error) {

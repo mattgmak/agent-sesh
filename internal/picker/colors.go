@@ -12,8 +12,6 @@ import (
 )
 
 var (
-	matchStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(1)).Bold(true)
-
 	// Entry element styles — each meta chunk gets its own hue for quick scanning.
 	sessionStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(15)).Bold(true)
 	paneStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
@@ -23,11 +21,8 @@ var (
 	cwdStyle     = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(4)).Faint(true)
 	promptStyle  = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(7)).Faint(true)
 
-	normalStyle = lipgloss.NewStyle()
-	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8)).Faint(true)
-	mutedStyle  = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8)).Faint(true)
-	faintStyle  = lipgloss.NewStyle().Faint(true)
-	borderStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8))
+	dimStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8)).Faint(true)
+	faintStyle = lipgloss.NewStyle().Faint(true)
 )
 
 func initTerminalColors() {

@@ -56,7 +56,7 @@ func Preview(w io.Writer, key string) error {
 		revision = previewRevision(session)
 	}
 	if revision != "" {
-		if content, err, ok := getPreviewCache(target, revision); ok {
+		if content, _, ok := getPreviewCache(target, revision); ok {
 			_, err = io.WriteString(w, content)
 			return err
 		}
