@@ -131,11 +131,8 @@ func truncateLine(line string, width int) string {
 	return truncateANSI(line, width)
 }
 
-func renderListGutter(selected bool) string {
-	if !selected {
-		return gutterMutedStyle.Render(strings.Repeat("▌", listGutterWidth))
-	}
-	return gutterStyle.Render(strings.Repeat("▌", listGutterWidth))
+func renderListGutter(selected bool, status registry.Status) string {
+	return gutterStyleFor(status, selected).Render(strings.Repeat("▌", listGutterWidth))
 }
 
 func renderListFrame(
@@ -171,7 +168,7 @@ func renderListFrame(
 		item := items[i]
 		selected := opts.showCursor && i == cursor
 
-		gutterWidth := lipgloss.Width(renderListGutter(selected))
+		gutterWidth := lipgloss.Width(renderListGutter(selected, item.Status))
 		gapWidth := lipgloss.Width(listEntryGap)
 		bodyWidth := lineWidth - gutterWidth - gapWidth
 		if bodyWidth < 1 {
@@ -181,7 +178,7 @@ func renderListFrame(
 		entryLines := renderEntry(item, bodyWidth)
 		styled := make([]string, 0, len(entryLines))
 		for _, part := range entryLines {
-			line := renderListGutter(selected) + listEntryGap + part
+			line := renderListGutter(selected, item.Status) + listEntryGap + part
 			styled = append(styled, line)
 		}
 		rowStarts[i] = len(allRows)
@@ -248,8 +245,7 @@ func clipLines(text string, width, rows int) string {
 	}
 
 	for i, line := range lines {
-		line = truncateANSI(line, width)
-		lines[i] = ensureResetSuffix(line)
+		lines[i] = ensureResetSuffix(truncateANSI(line, width))
 	}
 	return strings.Join(lines, "\n")
 }

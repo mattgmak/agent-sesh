@@ -10,11 +10,12 @@ func TestStatusPriority(t *testing.T) {
 		status Status
 		want   int
 	}{
-		{StatusWaiting, 0},
-		{StatusIdle, 1},
-		{StatusWorking, 2},
-		{StatusToolCall, 3},
-		{Status("unknown"), 1},
+		{StatusHalted, 0},
+		{StatusAwaitingInput, 1},
+		{StatusIdle, 2},
+		{StatusWorking, 3},
+		{StatusToolCall, 4},
+		{Status("unknown"), 2},
 	}
 	for _, tc := range tests {
 		if got := StatusPriority(tc.status); got != tc.want {
@@ -26,7 +27,7 @@ func TestStatusPriority(t *testing.T) {
 func TestSortSessionsByStatus(t *testing.T) {
 	sessions := []Session{
 		{ID: "working", Status: StatusWorking},
-		{ID: "waiting", Status: StatusWaiting},
+		{ID: "waiting", Status: StatusHalted},
 		{ID: "tool", Status: StatusToolCall},
 		{ID: "idle", Status: StatusIdle},
 	}
@@ -44,8 +45,8 @@ func TestSortSessionsByStatus(t *testing.T) {
 func TestSortSessionsMRUWithinStatus(t *testing.T) {
 	now := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
 	sessions := []Session{
-		{ID: "older", Status: StatusWaiting, LastPromptAt: now.Add(-time.Hour).Format(time.RFC3339)},
-		{ID: "newer", Status: StatusWaiting, LastPromptAt: now.Format(time.RFC3339)},
+		{ID: "older", Status: StatusHalted, LastPromptAt: now.Add(-time.Hour).Format(time.RFC3339)},
+		{ID: "newer", Status: StatusHalted, LastPromptAt: now.Format(time.RFC3339)},
 		{ID: "idle-old", Status: StatusIdle, LastPromptAt: now.Add(-2 * time.Hour).Format(time.RFC3339)},
 		{ID: "idle-new", Status: StatusIdle, LastPromptAt: now.Add(-30 * time.Minute).Format(time.RFC3339)},
 	}
@@ -65,13 +66,13 @@ func TestSortSessionsIgnoresStatusUpdatesForMRU(t *testing.T) {
 	sessions := []Session{
 		{
 			ID:           "recent-status",
-			Status:       StatusWaiting,
+			Status:       StatusHalted,
 			UpdatedAt:    now.Format(time.RFC3339),
 			LastPromptAt: now.Add(-2 * time.Hour).Format(time.RFC3339),
 		},
 		{
 			ID:           "recent-prompt",
-			Status:       StatusWaiting,
+			Status:       StatusHalted,
 			UpdatedAt:    now.Add(-time.Hour).Format(time.RFC3339),
 			LastPromptAt: now.Add(-30 * time.Minute).Format(time.RFC3339),
 		},

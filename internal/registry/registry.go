@@ -14,10 +14,11 @@ const sessionsFileName = "sessions.json"
 type Status string
 
 const (
-	StatusIdle     Status = "idle"
-	StatusWorking  Status = "working"
-	StatusToolCall Status = "tool_call"
-	StatusWaiting  Status = "waiting"
+	StatusIdle          Status = "idle"
+	StatusWorking       Status = "working"
+	StatusToolCall      Status = "tool_call"
+	StatusHalted        Status = "halted"
+	StatusAwaitingInput Status = "awaiting_input"
 )
 
 type Session struct {

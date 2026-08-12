@@ -9,16 +9,18 @@ import (
 // sooner and sort before higher values.
 func StatusPriority(status Status) int {
 	switch status {
-	case StatusWaiting:
+	case StatusHalted:
 		return 0
+	case StatusAwaitingInput:
+		return 1
 	case StatusIdle:
-		return 1
-	case StatusWorking:
 		return 2
-	case StatusToolCall:
+	case StatusWorking:
 		return 3
+	case StatusToolCall:
+		return 4
 	default:
-		return 1
+		return 2
 	}
 }
 

@@ -3,6 +3,7 @@ package picker
 import (
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -11,7 +12,7 @@ func truncateANSI(line string, width int) string {
 	if width < 1 {
 		return ""
 	}
-	if ansi.StringWidth(line) <= width {
+	if lipgloss.Width(line) <= width {
 		return line
 	}
 	return ansi.Truncate(line, width, "")

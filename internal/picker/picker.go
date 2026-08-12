@@ -22,32 +22,33 @@ const (
 )
 
 const (
-	registryRefreshInterval   = 3 * time.Second
-	discoveryRefreshInterval  = 30 * time.Second
-	previewMinRefreshInterval = 1200 * time.Millisecond
+	registryRefreshInterval    = 3 * time.Second
+	discoveryRefreshInterval   = 30 * time.Second
+	previewMinRefreshInterval  = 1200 * time.Millisecond
 	previewLiveRefreshInterval = 2 * time.Second
 )
 
 // Nerd Font 3 MDI codepoints (from nerd-fonts bin/scripts/lib/i_md.sh).
 const (
-	iconIdle     = "\U000F0766" // 󰝦 circle-outline
-	iconWorking  = "\U000F09D1" // 󰧑 brain
-	iconToolCall       = "\U000F1322" // 󱌢 hammer-screwdriver (tool metadata)
-	iconStatusToolCall = "\U000F0996" // 󰦖 progress-clock (tool_call status)
-	iconWaiting  = "\U000F009E" // 󰂞 bell-ring
-	iconFolder   = "\U000F0256" // 󰉖 folder-outline
-	iconBranch   = "\U000F062C" // 󰘬 source-branch
-	iconAgent    = "\U000F06A9" // 󰚩 robot
-	iconSession  = "\U000F018D" // 󰆍 console
-	iconPane     = "\U000F0BCC" // 󰯌 view-split-vertical
-	iconPrompt   = "\U000F036A" // 󰍪 message-text-outline
-	iconAttach   = "\U000F0339" // 󰌹 link-variant
-	iconKillPane = "\U000F0158" // 󰅘 close-box-outline
-	iconKillSess = "\U000F05E8" // 󰗨 delete-forever
-	iconNewWin   = "\U000F05B1" // 󰖱 window-open
-	iconFilter   = "\U000F0349" // 󰍉 magnify
-	iconRename   = "\U000F0455" // 󰑕 rename-box
-	iconQuit     = "\U000F0206" // 󰈆 exit-to-app
+	iconIdle            = "\U000F04B2" // 󰒲 (user choice)
+	iconWorking         = "\U000F09D1" // 󰧑 brain
+	iconToolCall        = "\U000F1322" // 󱌢 hammer-screwdriver (tool metadata)
+	iconStatusToolCall  = "\U000F0996" // 󰦖 progress-clock (tool_call status)
+	iconHalted          = "\U000F0377" // 󰍷 (user choice)
+	iconAwaitingInput   = "\U000F1C7A" // 󱜺 message-question
+	iconFolder         = "\U000F0256" // 󰉖 folder-outline
+	iconBranch         = "\U000F062C" // 󰘬 source-branch
+	iconAgent          = "\U000F06A9" // 󰚩 robot
+	iconSession        = "\U000F018D" // 󰆍 console
+	iconPane           = "\U000F0BCC" // 󰯌 view-split-vertical
+	iconPrompt         = "\U000F036A" // 󰍪 message-text-outline
+	iconAttach         = "\U000F0339" // 󰌹 link-variant
+	iconKillPane       = "\U000F0158" // 󰅘 close-box-outline
+	iconKillSess       = "\U000F05E8" // 󰗨 delete-forever
+	iconNewWin         = "\U000F05B1" // 󰖱 window-open
+	iconFilter         = "\U000F0349" // 󰍉 magnify
+	iconRename         = "\U000F0455" // 󰑕 rename-box
+	iconQuit           = "\U000F0206" // 󰈆 exit-to-app
 )
 
 type tickMsg struct{}
@@ -81,24 +82,24 @@ type sessionsLoadedMsg struct {
 }
 
 type model struct {
-	sessions        []registry.Session
-	cursor          int
-	selectedID      string
-	filter          textinput.Model
-	rename          textinput.Model
-	mode            mode
-	width           int
-	height          int
-	registry        string
-	statusLine      string
-	quitting        bool
-	attach          bool
-	previewContent  string
-	previewErr      error
-	previewPending  string
-	previewName     string
-	previewRevision string
-	previewSeq      int
+	sessions          []registry.Session
+	cursor            int
+	selectedID        string
+	filter            textinput.Model
+	rename            textinput.Model
+	mode              mode
+	width             int
+	height            int
+	registry          string
+	statusLine        string
+	quitting          bool
+	attach            bool
+	previewContent    string
+	previewErr        error
+	previewPending    string
+	previewName       string
+	previewRevision   string
+	previewSeq        int
 	loading           bool
 	registryMtime     time.Time
 	sessionsRenderKey string
@@ -280,6 +281,11 @@ func (m *model) reconcileCursor() {
 		}
 	}
 
+	// Default to the bottom-most entry (highest priority: halted, awaiting_input)
+	// when there is no prior selection to restore.
+	if m.selectedID == "" {
+		m.cursor = 0
+	}
 	if m.cursor >= len(items) {
 		m.cursor = len(items) - 1
 	}
@@ -655,6 +661,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !ok {
 				return m, nil
 			}
+			// Transition halted → idle on focus so the picker shows
+			// "acknowledged" state when the user returns to the pane.
+			if session.Status == registry.StatusHalted {
+				for i := range m.sessions {
+					if m.sessions[i].ID == session.ID {
+						m.sessions[i].Status = registry.StatusIdle
+						break
+					}
+				}
+				if err := registry.Save(m.registry, m.sessions); err != nil {
+					m.statusLine = err.Error()
+				}
+			}
 			if err := tmux.SwitchClient(session.TmuxTarget); err != nil {
 				m.statusLine = err.Error()
 				return m, nil
@@ -726,7 +745,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.filter, cmd = m.filter.Update(msg)
 		if m.filter.Value() != prevValue {
-			m.cursor = 0
 			m.reconcileCursor()
 			return m, tea.Batch(cmd, m.schedulePreview())
 		}
@@ -740,8 +758,10 @@ func statusIcon(status registry.Status) string {
 	switch status {
 	case registry.StatusWorking:
 		return iconWorking
-	case registry.StatusWaiting:
-		return iconWaiting
+	case registry.StatusHalted:
+		return iconHalted
+	case registry.StatusAwaitingInput:
+		return iconAwaitingInput
 	case registry.StatusToolCall:
 		return iconStatusToolCall
 	default:

@@ -33,7 +33,7 @@ func TestMergeSessionsIncrementalAddsNewTargets(t *testing.T) {
 	}}
 	loaded := []registry.Session{
 		{ID: "1", TmuxTarget: "%1", Status: registry.StatusWorking},
-		{ID: "2", TmuxTarget: "%2", Status: registry.StatusWaiting},
+		{ID: "2", TmuxTarget: "%2", Status: registry.StatusHalted},
 	}
 
 	got := mergeSessionsIncremental(current, loaded)

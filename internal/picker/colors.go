@@ -12,9 +12,7 @@ import (
 )
 
 var (
-	gutterStyle      = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(2)).Bold(true)
-	gutterMutedStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8)).Faint(true)
-	matchStyle       = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(1)).Bold(true)
+	matchStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(1)).Bold(true)
 
 	// Entry element styles — each meta chunk gets its own hue for quick scanning.
 	sessionStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(15)).Bold(true)
@@ -63,14 +61,24 @@ func colorProfileFromEnv() (colorprofile.Profile, bool) {
 	}
 }
 
+func gutterStyleFor(status registry.Status, selected bool) lipgloss.Style {
+	s := statusLabelStyle(status)
+	if selected {
+		return s.Background(lipgloss.ANSIColor(15)).UnsetFaint()
+	}
+	return s.Faint(true)
+}
+
 func statusLabelStyle(status registry.Status) lipgloss.Style {
 	base := lipgloss.NewStyle().UnsetBackground()
 	switch status {
 	case registry.StatusWorking:
 		return base.Foreground(lipgloss.ANSIColor(2)).Bold(true)
-	case registry.StatusWaiting:
-		return base.Foreground(lipgloss.Color("202")).Bold(true)
 	case registry.StatusToolCall:
+		return base.Foreground(lipgloss.ANSIColor(2)).Bold(true)
+	case registry.StatusHalted:
+		return base.Foreground(lipgloss.ANSIColor(1)).Bold(true)
+	case registry.StatusAwaitingInput:
 		return base.Foreground(lipgloss.Color("220")).Bold(true)
 	default:
 		return base.Foreground(lipgloss.ANSIColor(8))

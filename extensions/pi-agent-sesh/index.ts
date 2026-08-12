@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export type AgentSeshStatus = "idle" | "working" | "tool_call" | "waiting";
+export type AgentSeshStatus = "idle" | "working" | "tool_call" | "halted" | "awaiting_input";
 
 export interface AgentSeshSession {
 	id: string;
@@ -283,9 +283,24 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 		});
 	});
 
+	pi.on("tool_execution_end", async (event: ToolExecutionStartEvent, ctx) => {
+		const id = requireSessionId(ctx);
+		if (!id || event.toolName !== "ask_user_question") {
+			return;
+		}
+		await setStatus(id, "working");
+	});
+
 	pi.on("tool_execution_start", async (event: ToolExecutionStartEvent, ctx) => {
 		const id = requireSessionId(ctx);
-		if (!id || !event.toolName) {
+		if (!id) {
+			return;
+		}
+		if (event.toolName === "ask_user_question") {
+			await setStatus(id, "awaiting_input");
+			return;
+		}
+		if (!event.toolName) {
 			return;
 		}
 		await setStatus(id, "tool_call", truncateToolName(event.toolName));
@@ -301,7 +316,7 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 			cwd: ctx.sessionManager.getCwd(),
 			title: lastTitle,
 			model: modelLabel(ctx),
-			status: "waiting",
+			status: "halted",
 		});
 	});
 

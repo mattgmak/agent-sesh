@@ -9,11 +9,11 @@ import (
 func TestRefreshSessionsFromRegistrySorts(t *testing.T) {
 	current := []registry.Session{
 		{ID: "working", TmuxTarget: "%1", Status: registry.StatusWorking},
-		{ID: "waiting", TmuxTarget: "%2", Status: registry.StatusWaiting},
+		{ID: "waiting", TmuxTarget: "%2", Status: registry.StatusHalted},
 	}
 	fresh := []registry.Session{
 		{ID: "working", TmuxTarget: "%1", Status: registry.StatusWorking, ToolName: "Shell"},
-		{ID: "waiting", TmuxTarget: "%2", Status: registry.StatusWaiting},
+		{ID: "waiting", TmuxTarget: "%2", Status: registry.StatusHalted},
 	}
 
 	got := refreshSessionsFromRegistry(current, fresh)

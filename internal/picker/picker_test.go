@@ -121,7 +121,8 @@ func TestStatusIcon(t *testing.T) {
 		want   string
 	}{
 		{registry.StatusWorking, iconWorking},
-		{registry.StatusWaiting, iconWaiting},
+		{registry.StatusHalted, iconHalted},
+		{registry.StatusAwaitingInput, iconAwaitingInput},
 		{registry.StatusToolCall, iconStatusToolCall},
 		{registry.StatusIdle, iconIdle},
 		{registry.Status("unknown"), iconIdle},
@@ -137,16 +138,18 @@ func TestStatusIcon(t *testing.T) {
 func TestStatusIconsMatchNerdFontMDI(t *testing.T) {
 	// Codepoints from nerd-fonts bin/scripts/lib/i_md.sh (Material Design Icons).
 	want := map[string]rune{
-		"idle":      '\U000F0766', // nf-md-circle_outline
-		"working":   '\U000F09D1', // nf-md-brain
-		"waiting":   '\U000F009E', // nf-md-bell_ring
-		"tool_call": '\U000F0996', // nf-md-progress_clock
+		"idle":           '\U000F04B2', // nf-md (user choice)
+		"working":        '\U000F09D1', // nf-md-brain
+		"halted":         '\U000F0377', // nf-md (user choice)
+		"awaiting_input": '\U000F1C7A', // nf-md-message_question
+		"tool_call":      '\U000F0996', // nf-md-progress_clock
 	}
 	got := map[string]rune{
-		"idle":      []rune(iconIdle)[0],
-		"working":   []rune(iconWorking)[0],
-		"waiting":   []rune(iconWaiting)[0],
-		"tool_call": []rune(iconStatusToolCall)[0],
+		"idle":           []rune(iconIdle)[0],
+		"working":        []rune(iconWorking)[0],
+		"halted":         []rune(iconHalted)[0],
+		"awaiting_input": []rune(iconAwaitingInput)[0],
+		"tool_call":      []rune(iconStatusToolCall)[0],
 	}
 	for name, expected := range want {
 		if got[name] != expected {
