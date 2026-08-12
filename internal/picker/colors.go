@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	gutterStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(2)).Bold(true)
-	matchStyle  = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(1)).Bold(true)
+	gutterStyle      = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(2)).Bold(true)
+	gutterMutedStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8)).Faint(true)
+	matchStyle       = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(1)).Bold(true)
 
 	// Entry element styles — each meta chunk gets its own hue for quick scanning.
 	sessionStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(15)).Bold(true)

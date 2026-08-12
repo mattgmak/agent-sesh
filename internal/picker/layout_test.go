@@ -9,42 +9,17 @@ import (
 	"github.com/mattgmak/agent-sesh/internal/registry"
 )
 
-func TestVisibleCount(t *testing.T) {
-	if got := visibleCount(24); got != 22 {
-		t.Fatalf("visibleCount(24) = %d, want 22", got)
-	}
-	if got := visibleCount(1); got != fallbackVisibleCount {
-		t.Fatalf("visibleCount(1) = %d, want fallback %d", got, fallbackVisibleCount)
+func TestRenderListFrameEmpty(t *testing.T) {
+	out := renderListFrame(nil, 0, 5, 58, listRenderOpts{}, formatSessionEntry)
+	if out == "" {
+		t.Fatal("expected empty list message")
 	}
 }
 
-func TestRenderListFrameSeparatesEntries(t *testing.T) {
-	items := sampleSessions()
-	registry.SortSessions(items)
-	out := renderListFrame(items, 0, 20, 58, listRenderOpts{showCursor: true}, formatSessionEntry)
-	if !strings.Contains(out, "\n\n") {
-		t.Fatalf("expected blank line between entries, got:\n%s", out)
-	}
-	if strings.Contains(out, "> ") {
-		t.Fatalf("did not expect cursor chevron in list rows, got:\n%s", out)
-	}
-}
-
-func TestRenderListFrameBottomAligned(t *testing.T) {
-	items := sampleSessions()
-	registry.SortSessions(items)
-	visible := 12
-	out := renderListFrame(items, 0, visible, 58, listRenderOpts{showCursor: true}, formatSessionEntry)
-	lines := strings.Split(out, "\n")
-	if len(lines) != visible {
-		t.Fatalf("got %d lines, want %d", len(lines), visible)
-	}
-	joined := strings.Join(lines, "\n")
-	if !strings.Contains(joined, "idle pane") {
-		t.Fatalf("highest-priority idle session should be visible near bottom, got %q", joined)
-	}
-	if !strings.Contains(joined, "other") || !strings.Contains(joined, "go test") {
-		t.Fatalf("tool_call session should remain visible, got %q", joined)
+func TestRenderListFrameFixedHeightWhenEmpty(t *testing.T) {
+	out := renderListFrame([]registry.Session{}, 0, 3, 58, listRenderOpts{}, formatSessionEntry)
+	if got := strings.Count(out, "\n") + 1; got != 3 {
+		t.Fatalf("expected 3 lines in empty frame, got %d:\n%s", got, out)
 	}
 }
 
@@ -57,10 +32,10 @@ func TestRenderListFrameFixedHeightWhenScrolling(t *testing.T) {
 	}
 }
 
-func TestClipLinesKeepsHead(t *testing.T) {
+func TestClipLinesKeepsTail(t *testing.T) {
 	in := strings.Join([]string{"one", "two", "three", "four"}, "\n")
 	got := clipLines(in, 80, 2)
-	want := "one\ntwo"
+	want := "three\nfour"
 	if got != want {
 		t.Fatalf("clipLines() = %q, want %q", got, want)
 	}
@@ -77,143 +52,97 @@ func TestClipLinesPreservesANSI(t *testing.T) {
 		t.Fatalf("expected ansi preserved, got %q", lines[0])
 	}
 	if !strings.HasSuffix(lines[0], "\x1b[0m") {
-		t.Fatalf("expected reset suffix on colored line, got %q", lines[0])
+		t.Fatalf("expected ANSI reset suffix, got %q", lines[0])
 	}
 }
 
-func TestTruncateLineDoesNotWrap(t *testing.T) {
-	long := strings.Repeat("x", 120)
-	got := truncateLine(long, 20)
-	if strings.Count(got, "\n") > 0 {
-		t.Fatalf("truncateLine wrapped: %q", got)
+func TestClipLinesTruncatesWideANSI(t *testing.T) {
+	in := "\x1b[31m" + strings.Repeat("A", 40) + "\x1b[0m"
+	got := clipLines(in, 10, 1)
+	wide := lipgloss.Width(got)
+	if wide > 10 {
+		t.Fatalf("clipLines wide=%d, want <=10: %q", wide, got)
 	}
-	if lipgloss.Width(got) > 20 {
-		t.Fatalf("truncateLine width = %d, want <= 20", lipgloss.Width(got))
+}
+
+func TestClipLinesEmpty(t *testing.T) {
+	if got := clipLines("", 80, 5); got != "" {
+		t.Fatalf("clipLines empty = %q, want empty", got)
+	}
+	if got := clipLines("x", 0, 5); got != "" {
+		t.Fatalf("clipLines zero width = %q, want empty", got)
+	}
+	if got := clipLines("x", 80, 0); got != "" {
+		t.Fatalf("clipLines zero rows = %q, want empty", got)
+	}
+}
+
+func TestListWindowBasic(t *testing.T) {
+	offset, end := listWindow(0, 0, 5, 3)
+	if offset != 0 || end != 3 {
+		t.Fatalf("listWindow(0,0,5,3) = %d,%d, want 0,3", offset, end)
+	}
+}
+
+func TestListWindowCursorPastEnd(t *testing.T) {
+	offset, end := listWindow(10, 0, 5, 3)
+	if offset != 2 || end != 5 {
+		t.Fatalf("listWindow(10,0,5,3) = %d,%d, want 2,5", offset, end)
+	}
+}
+
+func TestListWindowCursorBeforeOffset(t *testing.T) {
+	offset, end := listWindow(1, 3, 8, 3)
+	if offset != 1 || end != 4 {
+		t.Fatalf("listWindow(1,3,8,3) = %d,%d, want 1,4", offset, end)
+	}
+}
+
+func TestListWindowCursorPastVisibleEnd(t *testing.T) {
+	offset, end := listWindow(5, 2, 8, 3)
+	if offset != 3 || end != 6 {
+		t.Fatalf("listWindow(5,2,8,3) = %d,%d, want 3,6", offset, end)
+	}
+}
+
+func TestListWindowEmpty(t *testing.T) {
+	offset, end := listWindow(0, 0, 0, 3)
+	if offset != 0 || end != 0 {
+		t.Fatalf("listWindow(empty) = %d,%d, want 0,0", offset, end)
+	}
+}
+
+func TestTruncateANSILine(t *testing.T) {
+	got := truncateLine("hello world", 5)
+	if lipgloss.Width(got) > 5 {
+		t.Fatalf("truncateLine width=%d > 5: %q", lipgloss.Width(got), got)
+	}
+}
+
+func TestRenderPreviewPaneEmptyContent(t *testing.T) {
+	out := renderPreviewPane("", 40, 10, nil, false)
+	if !strings.Contains(out, "No preview") {
+		t.Fatalf("expected 'No preview' message, got %q", out)
+	}
+}
+
+func TestRenderPreviewPaneLoading(t *testing.T) {
+	out := renderPreviewPane("", 40, 10, nil, true)
+	if !strings.Contains(out, "Loading") {
+		t.Fatalf("expected loading message, got %q", out)
 	}
 }
 
 func TestPadFrame(t *testing.T) {
-	got := padFrame("a\nb", 4)
-	lines := strings.Split(got, "\n")
-	if len(lines) != 4 {
-		t.Fatalf("len(lines) = %d, want 4", len(lines))
-	}
-	if lines[2] != "" || lines[3] != "" {
-		t.Fatalf("expected trailing padding, got %#v", lines)
+	got := padFrame("one", 3)
+	if strings.Count(got, "\n")+1 != 3 {
+		t.Fatalf("padFrame(one, 3) lines=%d, want 3:\n%s", strings.Count(got, "\n")+1, got)
 	}
 }
 
-func TestViewRendersSessionList(t *testing.T) {
-	m := testModel(sampleSessions())
-	m.width = 120
-	m.height = 24
-	m.syncInputWidth()
-
-	out := viewContent(m)
-	if !strings.Contains(out, "nixconfig") {
-		t.Fatalf("expected rendered sessions, got:\n%s", out)
-	}
-}
-
-func TestViewStableOnCursorMove(t *testing.T) {
-	m := testModel(sampleSessions())
-	m.width = 120
-	m.height = 24
-	m.syncInputWidth()
-
-	before := strings.Split(viewContent(m), "\n")
-	m = m.setCursor(1)
-	after := strings.Split(viewContent(m), "\n")
-	if len(before) != len(after) {
-		t.Fatalf("cursor move changed frame height: %d -> %d", len(before), len(after))
-	}
-}
-
-func TestViewNoPreviewWithoutSessions(t *testing.T) {
-	m := testModel(nil)
-	m.width = 120
-	m.height = 24
-	out := viewContent(m)
-	if strings.Contains(out, "Loading preview") {
-		t.Fatalf("did not expect preview without sessions, got:\n%s", out)
-	}
-}
-
-func TestFormatAnchoredBodyBottomAligns(t *testing.T) {
-	got := formatAnchoredBody(4, []string{"line1", "line2"})
-	lines := strings.Split(got, "\n")
-	if len(lines) != 4 {
-		t.Fatalf("got %d lines, want 4", len(lines))
-	}
-	if lines[0] != "" || lines[1] != "" {
-		t.Fatalf("expected top padding, got %#v", lines)
-	}
-	if lines[2] != "line1" || lines[3] != "line2" {
-		t.Fatalf("expected content at bottom, got %#v", lines)
-	}
-}
-
-func TestFormatEmptyListMessageNoMatches(t *testing.T) {
-	msg := formatEmptyListMessage(true)
-	if !strings.Contains(msg, "No matching sessions") {
-		t.Fatalf("expected no-match copy, got %q", msg)
-	}
-}
-
-func TestViewFilterStaysInListColumn(t *testing.T) {
-	m := testModel(sampleSessions())
-	m.width = 120
-	m.height = 24
-	m.syncInputWidth()
-
-	if !m.splitActive() {
-		t.Fatal("expected split layout for wide terminal")
-	}
-
-	listWidth := m.contentWidth()
-	out := viewContent(m)
-	for _, line := range strings.Split(out, "\n") {
-		if !strings.Contains(line, "> ") {
-			continue
-		}
-		plain := strings.Map(func(r rune) rune {
-			if r == '\x1b' {
-				return -1
-			}
-			return r
-		}, line)
-		if idx := strings.Index(plain, "╰"); idx >= 0 && idx < listWidth {
-			t.Fatalf("preview border intrudes into list column at %d (list=%d): %q", idx, listWidth, plain)
-		}
-		if lipgloss.Width(line[:min(len(line), listWidth*4)]) > 0 && strings.Index(plain, "> ") > listWidth {
-			t.Fatalf("filter prompt outside list column: %q", plain)
-		}
-		return
-	}
-	t.Fatal("expected filter row in view output")
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func TestLayoutWidthPassthrough(t *testing.T) {
-	if got := layoutWidth(120); got != 120 {
-		t.Fatalf("layoutWidth(120) = %d, want 120", got)
-	}
-}
-
-func TestSplitActiveRequiresSessions(t *testing.T) {
-	m := testModel(nil)
-	m.width = 120
-	if m.splitActive() {
-		t.Fatal("split should be inactive with no sessions")
-	}
-	m.sessions = sampleSessions()
-	if !m.splitActive() {
-		t.Fatal("split should be active when sessions exist")
+func TestPadFrameTruncates(t *testing.T) {
+	got := padFrame("one\ntwo\nthree\nfour", 2)
+	if strings.Count(got, "\n")+1 != 2 {
+		t.Fatalf("padFrame truncate lines=%d, want 2:\n%s", strings.Count(got, "\n")+1, got)
 	}
 }

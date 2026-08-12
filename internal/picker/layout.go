@@ -133,7 +133,7 @@ func truncateLine(line string, width int) string {
 
 func renderListGutter(selected bool) string {
 	if !selected {
-		return strings.Repeat(" ", listGutterWidth)
+		return gutterMutedStyle.Render(strings.Repeat("▌", listGutterWidth))
 	}
 	return gutterStyle.Render(strings.Repeat("▌", listGutterWidth))
 }
@@ -241,10 +241,10 @@ func clipLines(text string, width, rows int) string {
 
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	if len(lines) > rows {
-		// Keep the head of the capture (like sesh) so the preview shows the
-		// pane's stable content rather than the bottom rows, which for a TUI
-		// like pi are dominated by the input bar and recent tool-call lines.
-		lines = lines[:rows]
+		// Keep the tail (bottom) of the capture so the preview shows the
+		// agent TUI's full interface — status bar, tool output, input —
+		// from the bottom-most content upward.
+		lines = lines[len(lines)-rows:]
 	}
 
 	for i, line := range lines {

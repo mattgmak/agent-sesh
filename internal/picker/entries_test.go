@@ -184,8 +184,8 @@ func TestRenderIconTextChunkTruncatesWithEllipsis(t *testing.T) {
 }
 
 func TestRenderListGutterSelected(t *testing.T) {
-	if renderListGutter(false) != " " {
-		t.Fatalf("inactive gutter should be blank")
+	if got := renderListGutter(false); got == "" || got == " " {
+		t.Fatalf("inactive gutter should render muted marker, got %q", got)
 	}
 	if got := renderListGutter(true); got == "" || got == " " {
 		t.Fatalf("active gutter should render marker, got %q", got)
