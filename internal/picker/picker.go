@@ -412,10 +412,6 @@ func (m model) reload() model {
 		return m
 	}
 	next := refreshSessionsFromRegistry(m.sessions, fresh)
-	if len(next) == 0 {
-		m.quitting = true
-		return m
-	}
 	if !m.applySessionsIfChanged(next) {
 		return m
 	}
@@ -441,10 +437,6 @@ func (m model) reloadFull() model {
 	tmux.InvalidateSnapshot()
 	loaded := pruneAndPersist(m.registry, m.sessions)
 	merged := mergeSessionsIncremental(m.sessions, loaded)
-	if len(merged) == 0 {
-		m.quitting = true
-		return m
-	}
 	if !m.applySessionsIfChanged(merged) {
 		return m
 	}
@@ -533,10 +525,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = false
 		merged := mergeSessionsIncremental(m.sessions, msg.sessions)
-		if len(merged) == 0 {
-			m.quitting = true
-			return m, tea.Quit
-		}
 		if !m.applySessionsIfChanged(merged) {
 			return m, nil
 		}
@@ -547,10 +535,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.statusLine = msg.err.Error()
 			return m, scheduleDiscoveryRefresh()
-		}
-		if len(msg.sessions) == 0 {
-			m.quitting = true
-			return m, tea.Quit
 		}
 		if !m.applySessionsIfChanged(msg.sessions) {
 			return m, scheduleDiscoveryRefresh()

@@ -196,14 +196,14 @@ func TestShortCWD(t *testing.T) {
 	}
 }
 
-func TestReloadQuitsWhenSessionsEmpty(t *testing.T) {
+func TestReloadStaysOpenWhenSessionsEmpty(t *testing.T) {
 	t.Setenv("AGENT_SESH_DISABLE_DISCOVER", "1")
 	m := testModel(sampleSessions())
 	m.registry = t.TempDir() + "/missing.json"
 	m.sessions = nil
 	m = m.reload()
-	if !m.quitting {
-		t.Fatal("expected reload with no sessions to mark quitting")
+	if m.quitting {
+		t.Fatal("expected reload with no sessions to keep picker open, not quit")
 	}
 }
 
