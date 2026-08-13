@@ -90,6 +90,9 @@ func buildMetaChunks(session registry.Session) []metaChunk {
 		chunks = append(chunks, metaChunk{icon: iconPane, text: paneLabel, style: paneStyle})
 	}
 	chunks = append(chunks, metaChunk{icon: iconAgent, text: agent, style: agentStyle})
+	if model := strings.TrimSpace(session.Model); model != "" {
+		chunks = append(chunks, metaChunk{icon: iconModel, text: model, style: modelStyle})
+	}
 	if branch := strings.TrimSpace(session.Branch); branch != "" {
 		chunks = append(chunks, metaChunk{icon: iconBranch, text: branch, style: branchStyle})
 	}

@@ -39,6 +39,7 @@ const (
 	iconFolder         = "\U000F0256" // 󰉖 folder-outline
 	iconBranch         = "\U000F062C" // 󰘬 source-branch
 	iconAgent          = "\U000F06A9" // 󰚩 robot
+	iconModel          = "\U000F09D1" // 󰧑 brain
 	iconSession        = "\U000F018D" // 󰆍 console
 	iconPane           = "\U000F0BCC" // 󰯌 view-split-vertical
 	iconPrompt         = "\U000F036A" // 󰍪 message-text-outline
@@ -239,6 +240,7 @@ func (m model) filteredSessions() []registry.Session {
 			string(session.Status),
 			session.ToolName,
 			session.Agent,
+			session.Model,
 			session.TmuxTarget,
 		}, " "))
 		if strings.Contains(searchKey, query) {

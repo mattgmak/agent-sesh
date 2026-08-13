@@ -16,6 +16,7 @@ var (
 	sessionStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(15)).Bold(true)
 	paneStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
 	agentStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("135"))
+	modelStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
 	branchStyle  = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(14)).Bold(true)
 	toolStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(5)).Bold(true)
 	cwdStyle     = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(4)).Faint(true)
