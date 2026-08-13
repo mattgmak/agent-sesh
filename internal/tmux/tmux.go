@@ -2,7 +2,6 @@ package tmux
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -13,7 +12,7 @@ func PaneExists(target string) bool {
 	if snap, err := GetSnapshot(false); err == nil && snap.HasPane(target) {
 		return true
 	}
-	err := exec.Command("tmux", "list-panes", "-t", target, "-F", "#{pane_id}").Run()
+	err := execRun("tmux.list-panes", "tmux", "list-panes", "-t", target, "-F", "#{pane_id}")
 	return err == nil
 }
 
@@ -38,9 +37,9 @@ func CapturePane(target string, lines int) (string, error) {
 	if lines <= 0 {
 		lines = 200
 	}
-	out, err := exec.Command(
-		"tmux", "capture-pane", "-e", "-p", "-J", "-S", fmt.Sprintf("-%d", lines), "-t", target,
-	).Output()
+	out, err := execOutput(
+		"tmux.capture-pane", "tmux", "capture-pane", "-e", "-p", "-J", "-S", fmt.Sprintf("-%d", lines), "-t", target,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -48,7 +47,7 @@ func CapturePane(target string, lines int) (string, error) {
 }
 
 func capturePaneVisible(target string) (string, bool) {
-	out, err := exec.Command("tmux", "capture-pane", "-e", "-p", "-t", target).Output()
+	out, err := execOutput("tmux.capture-pane-visible", "tmux", "capture-pane", "-e", "-p", "-t", target)
 	if err != nil || strings.TrimSpace(string(out)) == "" {
 		return "", false
 	}
@@ -56,7 +55,7 @@ func capturePaneVisible(target string) (string, bool) {
 }
 
 func capturePaneAltScreen(target string) (string, bool) {
-	out, err := exec.Command("tmux", "capture-pane", "-e", "-p", "-a", "-q", "-t", target).Output()
+	out, err := execOutput("tmux.capture-pane-alt", "tmux", "capture-pane", "-e", "-p", "-a", "-q", "-t", target)
 	if err != nil || strings.TrimSpace(string(out)) == "" {
 		return "", false
 	}
@@ -69,15 +68,15 @@ func SwitchClient(target string) error {
 		return fmt.Errorf("empty pane target")
 	}
 	if kind, _ := ParseTarget(target); kind == TargetPane {
-		if err := exec.Command("tmux", "select-pane", "-t", target).Run(); err != nil {
+		if err := execRun("tmux.select-pane", "tmux", "select-pane", "-t", target); err != nil {
 			return err
 		}
 	}
-	return exec.Command("tmux", "switch-client", "-t", target).Run()
+	return execRun("tmux.switch-client", "tmux", "switch-client", "-t", target)
 }
 
 func SessionName(target string) (string, error) {
-	out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{session_name}").Output()
+	out, err := execOutput("tmux.session-name", "tmux", "display-message", "-p", "-t", target, "#{session_name}")
 	if err != nil {
 		return "", err
 	}
@@ -85,7 +84,7 @@ func SessionName(target string) (string, error) {
 }
 
 func PanePath(target string) (string, error) {
-	out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{pane_current_path}").Output()
+	out, err := execOutput("tmux.pane-path", "tmux", "display-message", "-p", "-t", target, "#{pane_current_path}")
 	if err != nil {
 		return "", err
 	}
@@ -97,15 +96,15 @@ func RenameSession(session string, name string) error {
 	if name == "" {
 		return fmt.Errorf("session name cannot be empty")
 	}
-	return exec.Command("tmux", "rename-session", "-t", session, name).Run()
+	return execRun("tmux.rename-session", "tmux", "rename-session", "-t", session, name)
 }
 
 func KillPane(target string) error {
-	return exec.Command("tmux", "kill-pane", "-t", target).Run()
+	return execRun("tmux.kill-pane", "tmux", "kill-pane", "-t", target)
 }
 
 func KillSession(name string) error {
-	return exec.Command("tmux", "kill-session", "-t", name).Run()
+	return execRun("tmux.kill-session", "tmux", "kill-session", "-t", name)
 }
 
 func NewWindowAtPanePath(target string) error {
@@ -121,7 +120,7 @@ func NewWindowAtPanePath(target string) error {
 	if path != "" {
 		args = append(args, "-c", path)
 	}
-	return exec.Command("tmux", args...).Run()
+	return execRun("tmux.new-window", append([]string{"tmux"}, args...)...)
 }
 
 // TargetKind classifies a tmux target string.

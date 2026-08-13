@@ -1,7 +1,7 @@
 package tmux
 
 import (
-	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -9,7 +9,11 @@ import (
 
 const (
 	defaultSnapshotTTL = 10 * time.Second
-	paneListFormat     = "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}"
+	// piScanTTL bounds how stale the tty→pi detection result may get when the
+	// set of ttys to scan is unchanged. ps has a fixed ~20ms startup cost on
+	// macOS, so this cache avoids re-paying it on every snapshot refresh.
+	piScanTTL      = 15 * time.Second
+	paneListFormat = "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}"
 )
 
 // Snapshot is a cached tmux list-panes result used to avoid per-pane subprocess storms.
@@ -22,6 +26,11 @@ var (
 	snapshotMu    sync.Mutex
 	snapshotCache *Snapshot
 	snapshotTTL   = defaultSnapshotTTL
+
+	piScanMu   sync.Mutex
+	piScanKey  string
+	piScanTTYs map[string]bool
+	piScanAt   time.Time
 )
 
 // InvalidateSnapshot drops the in-memory pane snapshot.
@@ -44,15 +53,13 @@ func GetSnapshot(force bool) (*Snapshot, error) {
 }
 
 func refreshSnapshot() (*Snapshot, error) {
-	out, err := exec.Command("tmux", "list-panes", "-a", "-F", paneListFormat).Output()
+	out, err := execOutput("tmux.list-panes", "tmux", "list-panes", "-a", "-F", paneListFormat)
 	if err != nil {
 		return nil, err
 	}
 
-	// One `ps -e` scan covering all pane ttys, instead of one ps per pane.
-	piTTYs := piAgentTTYs()
-
 	panes := make(map[string]PaneInfo)
+	scanTTYs := make(map[string]struct{})
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -75,8 +82,24 @@ func refreshSnapshot() (*Snapshot, error) {
 			CurrentPath:    fields[7],
 			Exists:         true,
 		}
-		info.HasPiAgent = isPiCommand(info.CurrentCommand, info.StartCommand) ||
-			piTTYs[ttyBaseName(info.TTY)]
+		info.HasPiAgent = isPiCommand(info.CurrentCommand, info.StartCommand)
+		if !info.HasPiAgent {
+			if tty := ttyBaseName(info.TTY); tty != "" {
+				scanTTYs[tty] = struct{}{}
+			}
+		}
+		panes[target] = info
+	}
+
+	// One scoped `ps -t` scan covering only the pane ttys whose command didn't
+	// already prove pi, instead of a full-system `ps -e` scan. The result is
+	// cached by tty set (see cachedPiAgentTTYs).
+	piTTYs := cachedPiAgentTTYs(scanTTYs)
+
+	for target, info := range panes {
+		if !info.HasPiAgent {
+			info.HasPiAgent = piTTYs[ttyBaseName(info.TTY)]
+		}
 		panes[target] = info
 	}
 
@@ -85,6 +108,33 @@ func refreshSnapshot() (*Snapshot, error) {
 	snapshotCache = snap
 	snapshotMu.Unlock()
 	return snap, nil
+}
+
+// cachedPiAgentTTYs returns the tty→pi map for the given ttys, reusing the
+// previous ps scan when the tty set is unchanged and the result is still
+// fresh. Because ps carries a fixed ~20ms startup cost regardless of the
+// column requested, avoiding re-scans is the dominant optimization here.
+func cachedPiAgentTTYs(scanTTYs map[string]struct{}) map[string]bool {
+	if len(scanTTYs) == 0 {
+		return nil
+	}
+	ttys := make([]string, 0, len(scanTTYs))
+	for tty := range scanTTYs {
+		ttys = append(ttys, tty)
+	}
+	sort.Strings(ttys)
+	key := strings.Join(ttys, ",")
+
+	piScanMu.Lock()
+	defer piScanMu.Unlock()
+	if piScanKey == key && time.Since(piScanAt) < piScanTTL {
+		return piScanTTYs
+	}
+	result := piAgentTTYs(ttys)
+	piScanKey = key
+	piScanTTYs = result
+	piScanAt = time.Now()
+	return result
 }
 
 func detectPiAgent(info PaneInfo) bool {

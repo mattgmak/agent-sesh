@@ -1,7 +1,6 @@
 package tmux
 
 import (
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -23,7 +22,7 @@ type PaneInfo struct {
 
 // PaneTTY returns the tty device for a tmux pane target.
 func PaneTTY(target string) (string, error) {
-	out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{pane_tty}").Output()
+	out, err := execOutput("tmux.pane-tty", "tmux", "display-message", "-p", "-t", target, "#{pane_tty}")
 	if err != nil {
 		return "", err
 	}
@@ -32,7 +31,7 @@ func PaneTTY(target string) (string, error) {
 
 // PaneLocation returns window.pane coordinates for a tmux pane target.
 func PaneLocation(target string) (window, pane string, ok bool) {
-	out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{window_index}\t#{pane_index}").Output()
+	out, err := execOutput("tmux.pane-location", "tmux", "display-message", "-p", "-t", target, "#{window_index}\t#{pane_index}")
 	if err != nil {
 		return "", "", false
 	}
@@ -45,7 +44,7 @@ func PaneLocation(target string) (window, pane string, ok bool) {
 
 // PanePID returns the shell pid for a tmux pane target.
 func PanePID(target string) (int, error) {
-	out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{pane_pid}").Output()
+	out, err := execOutput("tmux.pane-pid", "tmux", "display-message", "-p", "-t", target, "#{pane_pid}")
 	if err != nil {
 		return 0, err
 	}
@@ -80,7 +79,7 @@ func paneHasPiOnTTY(target string) bool {
 	if err != nil || tty == "" {
 		return false
 	}
-	out, err := exec.Command("ps", "-t", tty, "-o", "command=").Output()
+	out, err := execOutput("ps.pane-tty", "ps", "-t", tty, "-o", "command=")
 	if err != nil {
 		return false
 	}
@@ -98,10 +97,13 @@ func ttyBaseName(tty string) string {
 	return strings.TrimPrefix(strings.TrimSpace(tty), "/dev/")
 }
 
-// piAgentTTYs scans all processes once and returns the set of ttys that have a
-// pi agent running on them.
-func piAgentTTYs() map[string]bool {
-	out, err := exec.Command("ps", "-e", "-o", "tty=,command=").Output()
+// piAgentTTYs scans the given ttys once and returns the set of ttys that have
+// a pi agent running on them.
+func piAgentTTYs(ttys []string) map[string]bool {
+	if len(ttys) == 0 {
+		return nil
+	}
+	out, err := execOutput("ps.tty-scan", "ps", "-t", strings.Join(ttys, ","), "-o", "tty=,command=")
 	if err != nil {
 		return nil
 	}
@@ -151,7 +153,7 @@ func processTreeHasPi(pid int, depth int) bool {
 	if pid <= 0 || depth <= 0 {
 		return false
 	}
-	out, err := exec.Command("pgrep", "-P", strconv.Itoa(pid)).Output()
+	out, err := execOutput("pgrep.children", "pgrep", "-P", strconv.Itoa(pid))
 	if err != nil {
 		return false
 	}
@@ -160,7 +162,7 @@ func processTreeHasPi(pid int, depth int) bool {
 		if err != nil {
 			continue
 		}
-		cmd, err := exec.Command("ps", "-o", "command=", "-p", line).Output()
+		cmd, err := execOutput("ps.command", "ps", "-o", "command=", "-p", line)
 		if err == nil && isPiProcessLine(string(cmd)) {
 			return true
 		}
@@ -194,7 +196,7 @@ func PaneInfoForOpts(target string, knownPi bool) PaneInfo {
 
 	info.Exists = PaneExists(info.Target)
 	format := "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}"
-	out, err := exec.Command("tmux", "display-message", "-p", "-t", info.Target, "-F", format).Output()
+	out, err := execOutput("tmux.pane-info", "tmux", "display-message", "-p", "-t", info.Target, "-F", format)
 	if err != nil {
 		return info
 	}
@@ -227,7 +229,7 @@ func ListPaneIDs() ([]string, error) {
 			return ids, nil
 		}
 	}
-	out, err := exec.Command("tmux", "list-panes", "-a", "-F", "#{pane_id}").Output()
+	out, err := execOutput("tmux.list-panes-ids", "tmux", "list-panes", "-a", "-F", "#{pane_id}")
 	if err != nil {
 		return nil, err
 	}

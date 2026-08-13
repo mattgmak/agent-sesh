@@ -1,6 +1,9 @@
 package tmux
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestIsPiCommand(t *testing.T) {
 	if !isPiCommand("pi", "") {
@@ -65,4 +68,34 @@ func TestPiPanesFilters(t *testing.T) {
 	if len(got) != 1 || got[0].Target != "%1" {
 		t.Fatalf("PiPanes() = %+v", got)
 	}
+}
+
+func TestCachedPiAgentTTYsEmpty(t *testing.T) {
+	if cachedPiAgentTTYs(nil) != nil {
+		t.Fatal("nil set should return nil without scanning")
+	}
+	if cachedPiAgentTTYs(map[string]struct{}{}) != nil {
+		t.Fatal("empty set should return nil without scanning")
+	}
+}
+
+func TestCachedPiAgentTTYsReuse(t *testing.T) {
+	// Pre-populate the cache as if a scan just ran for ttys004,ttys005.
+	piScanMu.Lock()
+	piScanKey = "ttys004,ttys005"
+	piScanTTYs = map[string]bool{"ttys004": true}
+	piScanAt = time.Now()
+	piScanMu.Unlock()
+
+	got := cachedPiAgentTTYs(map[string]struct{}{"ttys004": {}, "ttys005": {}})
+	if !got["ttys004"] || got["ttys005"] {
+		t.Fatalf("expected cached result reuse, got %v", got)
+	}
+
+	// Reset cache state so later tests aren't affected.
+	piScanMu.Lock()
+	piScanKey = ""
+	piScanTTYs = nil
+	piScanAt = time.Time{}
+	piScanMu.Unlock()
 }

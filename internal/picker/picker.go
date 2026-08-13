@@ -113,8 +113,14 @@ func Run() error {
 	if _, err := initProfile(); err != nil {
 		return fmt.Errorf("init profile: %w", err)
 	}
+	if _, err := startCPUProfile(); err != nil {
+		return fmt.Errorf("init cpu profile: %w", err)
+	}
 	defer func() {
 		tmux.InvalidateSnapshot()
+		if path := stopCPUProfile(); path != "" {
+			fmt.Fprintf(os.Stderr, "agent-sesh: cpu profile %s\n", path)
+		}
 		if path := closeProfile(); path != "" {
 			fmt.Fprintf(os.Stderr, "agent-sesh: profile log %s\n", path)
 		}
