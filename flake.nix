@@ -24,14 +24,14 @@
         agent-sesh = pkgs.buildGoModule {
           pname = "agent-sesh";
           version = "0.1.0";
-          src = ./.;
+          src = self;
           vendorHash = null;
           meta.mainProgram = "agent-sesh";
         };
         tmuxPlugin = pkgs.tmuxPlugins.mkTmuxPlugin {
           pluginName = "agent-sesh";
           version = "0.1.0";
-          src = ./plugin;
+          src = self + "/plugin";
           extraDependencies = [ agent-sesh ];
           # tmux run-shell executes the rtp file directly; nix store copies are not +x by default.
           postInstall = ''
