@@ -265,6 +265,30 @@ func TestBottomAlignedCursorMovesUpToNextSession(t *testing.T) {
 	}
 }
 
+func TestCyclicCursorWrapsBothEnds(t *testing.T) {
+	m := testModel(sampleSessions())
+	registry.SortSessions(m.sessions)
+	items := m.filteredSessions()
+	n := len(items)
+	if n < 2 {
+		t.Fatal("need at least 2 sessions")
+	}
+
+	// Up past the last item wraps to the first.
+	m.cursor = n - 1
+	m.selectedID = items[n-1].ID
+	m = m.setCursor(m.cursor + 1)
+	if m.cursor != 0 || m.selectedID != items[0].ID {
+		t.Fatalf("up from last: want cursor 0 / id %q, got %d / %q", items[0].ID, m.cursor, m.selectedID)
+	}
+
+	// Down past the first item wraps to the last.
+	m = m.setCursor(m.cursor - 1)
+	if m.cursor != n-1 || m.selectedID != items[n-1].ID {
+		t.Fatalf("down from first: want cursor %d / id %q, got %d / %q", n-1, items[n-1].ID, m.cursor, m.selectedID)
+	}
+}
+
 func TestFormatSessionLineMultiline(t *testing.T) {
 	line := formatSessionLine(sampleSessions()[0], 120)
 	if !strings.Contains(line, "\n") {

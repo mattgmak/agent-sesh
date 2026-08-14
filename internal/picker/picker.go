@@ -459,12 +459,9 @@ func (m model) setCursor(index int) model {
 		m.selectedID = ""
 		return m
 	}
-	if index < 0 {
-		index = 0
-	}
-	if index >= len(items) {
-		index = len(items) - 1
-	}
+	// Cyclic scrolling: wrap around both ends instead of clamping.
+	// (cursor+1 at the last item → 0; cursor-1 at 0 → last item)
+	index = ((index % len(items)) + len(items)) % len(items)
 	m.cursor = index
 	m.selectedID = items[index].ID
 	return m
