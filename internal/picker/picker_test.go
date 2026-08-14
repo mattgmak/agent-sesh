@@ -136,12 +136,12 @@ func TestStatusIcon(t *testing.T) {
 }
 
 func TestStatusIconsMatchNerdFontMDI(t *testing.T) {
-	// Codepoints from nerd-fonts bin/scripts/lib/i_md.sh (Material Design Icons).
+	// Codepoints from nerd-fonts bin/scripts/lib/i_md.sh (MDI) / i_fa.sh (FA).
 	want := map[string]rune{
 		"idle":           '\U000F04B2', // nf-md (user choice)
 		"working":        '\U000F09D1', // nf-md-brain
 		"halted":         '\U000F0377', // nf-md (user choice)
-		"awaiting_input": '\U000F1C7A', // nf-md-message_question
+		"awaiting_input": '\uF128',     // nf-fa-question
 		"tool_call":      '\U000F0996', // nf-md-progress_clock
 	}
 	got := map[string]rune{

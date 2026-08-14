@@ -28,14 +28,14 @@ const (
 	previewLiveRefreshInterval = 2 * time.Second
 )
 
-// Nerd Font 3 MDI codepoints (from nerd-fonts bin/scripts/lib/i_md.sh).
+// Nerd Font codepoints (MDI from bin/scripts/lib/i_md.sh, FA from i_fa.sh).
 const (
 	iconIdle           = "\U000F04B2" // 󰒲 (user choice)
 	iconWorking        = "\U000F09D1" // 󰧑 brain
 	iconToolCall       = "\U000F1322" // 󱌢 hammer-screwdriver (tool metadata)
 	iconStatusToolCall = "\U000F0996" // 󰦖 progress-clock (tool_call status)
 	iconHalted         = "\U000F0377" // 󰍷 (user choice)
-	iconAwaitingInput  = "\U000F1C7A" // 󱜺 message-question
+	iconAwaitingInput  = "\uF128"     //  nf-fa-question
 	iconFolder         = "\U000F0256" // 󰉖 folder-outline
 	iconBranch         = "\U000F062C" // 󰘬 source-branch
 	iconAgent          = "\U000F06A9" // 󰚩 robot
