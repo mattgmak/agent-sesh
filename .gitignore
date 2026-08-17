@@ -2,6 +2,9 @@
 /agent-sesh
 /result
 
+# Node (pi extension typecheck deps)
+node_modules/
+
 # Scratch / lint caches
 claudetmp_capture/
 

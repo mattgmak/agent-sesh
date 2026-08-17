@@ -21,6 +21,18 @@ const (
 	StatusAwaitingInput Status = "awaiting_input"
 )
 
+// NormalizeStatus maps legacy status strings to canonical values.
+func NormalizeStatus(status Status) Status {
+	switch status {
+	case StatusIdle, StatusWorking, StatusToolCall, StatusHalted, StatusAwaitingInput:
+		return status
+	case "waiting":
+		return StatusHalted
+	default:
+		return status
+	}
+}
+
 type Session struct {
 	ID           string `json:"id"`
 	TmuxTarget   string `json:"tmux_target"`
@@ -80,7 +92,11 @@ func Load(path string) ([]Session, error) {
 	if file.Version == 0 {
 		file.Version = 1
 	}
-	return file.Sessions, nil
+	sessions := file.Sessions
+	for i := range sessions {
+		sessions[i].Status = NormalizeStatus(sessions[i].Status)
+	}
+	return sessions, nil
 }
 
 func Save(path string, sessions []Session) error {

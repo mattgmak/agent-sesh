@@ -1,6 +1,13 @@
 import type {
+	AgentSettledEvent,
+	AgentStartEvent,
+	BeforeAgentStartEvent,
 	ExtensionAPI,
 	ExtensionContext,
+	SessionShutdownEvent,
+	SessionStartEvent,
+	ToolExecutionEndEvent,
+	ToolExecutionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -10,7 +17,12 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export type AgentSeshStatus = "idle" | "working" | "tool_call" | "halted" | "awaiting_input";
+export type AgentSeshStatus =
+	| "idle"
+	| "working"
+	| "tool_call"
+	| "halted"
+	| "awaiting_input";
 
 export interface AgentSeshSession {
 	id: string;
@@ -33,14 +45,6 @@ export interface AgentSeshSession {
 interface RegistryFile {
 	version: 1;
 	sessions: AgentSeshSession[];
-}
-
-interface ToolExecutionStartEvent {
-	toolName?: string;
-}
-
-interface BeforeAgentStartEvent {
-	prompt?: string;
 }
 
 function registryPath(): string {
@@ -177,7 +181,7 @@ export async function upsertSession(partial: {
 	title: string;
 	last_prompt?: string;
 	status?: AgentSeshStatus;
-	tool_name?: string;
+	tool_name?: string | null;
 	model?: string;
 }): Promise<void> {
 	const target = await tmuxTarget();
@@ -204,7 +208,10 @@ export async function upsertSession(partial: {
 		last_prompt: partial.last_prompt ?? existing?.last_prompt,
 		last_prompt_at: promptUpdated ? now : existing?.last_prompt_at,
 		status: partial.status ?? existing?.status ?? "idle",
-		tool_name: partial.tool_name ?? existing?.tool_name,
+		tool_name:
+			partial.tool_name === null
+				? undefined
+				: (partial.tool_name ?? existing?.tool_name),
 		model: partial.model ?? existing?.model,
 		agent: "pi",
 		updated_at: now,
@@ -228,7 +235,7 @@ export async function removeSession(id: string): Promise<void> {
 export async function setStatus(
 	id: string,
 	status: AgentSeshStatus,
-	toolName?: string,
+	toolName?: string | null,
 ): Promise<void> {
 	const file = await readRegistry();
 	const idx = file.sessions.findIndex((entry) => entry.id === id);
@@ -237,7 +244,13 @@ export async function setStatus(
 	}
 	const session = file.sessions[idx];
 	session.status = status;
-	session.tool_name = toolName;
+	if (toolName === null) {
+		delete session.tool_name;
+	} else if (toolName !== undefined) {
+		session.tool_name = toolName;
+	} else if (status !== "tool_call") {
+		delete session.tool_name;
+	}
 	session.updated_at = new Date().toISOString();
 	file.sessions = [session, ...file.sessions.filter((_, i) => i !== idx)];
 	await writeRegistry(file);
@@ -251,89 +264,120 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 		return sessionId ?? ctx.sessionManager.getSessionId();
 	}
 
-	pi.on("session_start", async (_event, ctx) => {
-		sessionId = ctx.sessionManager.getSessionId();
-		if (!sessionId) {
-			return;
-		}
-		lastTitle = sessionTitle(pi, ctx);
-		await upsertSession({
-			id: sessionId,
-			cwd: ctx.sessionManager.getCwd(),
-			title: lastTitle,
-			model: modelLabel(ctx),
-			status: "idle",
-		});
-	});
+	pi.on(
+		"session_start",
+		async (event: SessionStartEvent, ctx: ExtensionContext) => {
+			sessionId = ctx.sessionManager.getSessionId();
+			if (!sessionId) {
+				return;
+			}
+			lastTitle = sessionTitle(pi, ctx);
+			await upsertSession({
+				id: sessionId,
+				cwd: ctx.sessionManager.getCwd(),
+				title: lastTitle,
+				model: modelLabel(ctx),
+				// Extension reloads must not clobber live working/tool_call status.
+				...(event.reason === "reload" ? {} : { status: "idle" }),
+			});
+		},
+	);
 
-	pi.on("before_agent_start", async (event: BeforeAgentStartEvent, ctx) => {
-		const id = requireSessionId(ctx);
-		if (!id) {
-			return;
-		}
-		const prompt = event.prompt?.trim();
-		lastTitle = sessionTitle(pi, ctx, event.prompt);
-		await upsertSession({
-			id,
-			cwd: ctx.sessionManager.getCwd(),
-			title: lastTitle,
-			last_prompt: prompt || undefined,
-			model: modelLabel(ctx),
-			status: "working",
-		});
-	});
+	pi.on(
+		"before_agent_start",
+		async (event: BeforeAgentStartEvent, ctx: ExtensionContext) => {
+			const id = requireSessionId(ctx);
+			if (!id) {
+				return;
+			}
+			const prompt = event.prompt?.trim();
+			lastTitle = sessionTitle(pi, ctx, event.prompt);
+			await upsertSession({
+				id,
+				cwd: ctx.sessionManager.getCwd(),
+				title: lastTitle,
+				last_prompt: prompt || undefined,
+				model: modelLabel(ctx),
+				status: "working",
+			});
+		},
+	);
 
-	pi.on("tool_execution_end", async (event: ToolExecutionStartEvent, ctx) => {
-		const id = requireSessionId(ctx);
-		if (!id || event.toolName !== "ask_user_question") {
-			return;
-		}
-		await setStatus(id, "working");
-	});
+	pi.on(
+		"tool_execution_end",
+		async (_event: ToolExecutionEndEvent, ctx: ExtensionContext) => {
+			const id = requireSessionId(ctx);
+			if (!id) {
+				return;
+			}
+			await setStatus(id, "working");
+		},
+	);
 
-	pi.on("tool_execution_start", async (event: ToolExecutionStartEvent, ctx) => {
-		const id = requireSessionId(ctx);
-		if (!id) {
-			return;
-		}
-		if (event.toolName === "ask_user_question") {
-			await setStatus(id, "awaiting_input");
-			return;
-		}
-		if (!event.toolName) {
-			return;
-		}
-		await setStatus(id, "tool_call", truncateToolName(event.toolName));
-	});
+	pi.on(
+		"tool_execution_start",
+		async (event: ToolExecutionStartEvent, ctx: ExtensionContext) => {
+			const id = requireSessionId(ctx);
+			if (!id) {
+				return;
+			}
+			if (event.toolName === "ask_user_question") {
+				await setStatus(id, "awaiting_input");
+				return;
+			}
+			if (!event.toolName) {
+				return;
+			}
+			await setStatus(id, "tool_call", truncateToolName(event.toolName));
+		},
+	);
 
-	pi.on("agent_end", async (_event, ctx) => {
-		const id = requireSessionId(ctx);
-		if (!id) {
-			return;
-		}
-		await upsertSession({
-			id,
-			cwd: ctx.sessionManager.getCwd(),
-			title: lastTitle,
-			model: modelLabel(ctx),
-			status: "halted",
-		});
-	});
+	pi.on(
+		"agent_start",
+		async (_event: AgentStartEvent, ctx: ExtensionContext) => {
+			const id = requireSessionId(ctx);
+			if (!id) {
+				return;
+			}
+			await setStatus(id, "working");
+		},
+	);
 
-	pi.on("session_shutdown", async (_event, ctx) => {
-		const id = requireSessionId(ctx);
-		if (!id) {
-			return;
-		}
-		const target = await tmuxTarget();
-		await removeSession(id);
-		if (target) {
-			const file = await readRegistry();
-			file.sessions = file.sessions.filter(
-				(session) => session.tmux_target !== target,
-			);
-			await writeRegistry(file);
-		}
-		sessionId = undefined;
-	});
+	pi.on(
+		"agent_settled",
+		async (_event: AgentSettledEvent, ctx: ExtensionContext) => {
+			const id = requireSessionId(ctx);
+			if (!id) {
+				return;
+			}
+			await upsertSession({
+				id,
+				cwd: ctx.sessionManager.getCwd(),
+				title: lastTitle,
+				model: modelLabel(ctx),
+				status: "halted",
+				tool_name: null,
+			});
+		},
+	);
+
+	pi.on(
+		"session_shutdown",
+		async (_event: SessionShutdownEvent, ctx: ExtensionContext) => {
+			const id = requireSessionId(ctx);
+			if (!id) {
+				return;
+			}
+			const target = await tmuxTarget();
+			await removeSession(id);
+			if (target) {
+				const file = await readRegistry();
+				file.sessions = file.sessions.filter(
+					(session) => session.tmux_target !== target,
+				);
+				await writeRegistry(file);
+			}
+			sessionId = undefined;
+		},
+	);
 }
