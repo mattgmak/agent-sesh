@@ -117,14 +117,19 @@
 
               # Bind after plugins — plugin run-shell scripts can fail to register prefix binds during load.
               programs.tmux.extraConfig = lib.mkAfter (
-                if config.programs.agent-sesh.useFzf then
-                  ''
-                    bind-key -T prefix -N "agent-sesh: picker (fzf)" ${key} run-shell "${bin} fzf"
-                  ''
-                else
-                  ''
-                    bind-key -T prefix -N "agent-sesh: picker" ${key} display-popup -E -b rounded -T "agent-sesh" -s "${style}" -w "${width}" -h "${height}" "${bin}"
-                  ''
+                ''
+                  set -g @agent-sesh-bin ${lib.escapeShellArg bin}
+                ''
+                + (
+                  if config.programs.agent-sesh.useFzf then
+                    ''
+                      bind-key -T prefix -N "agent-sesh: picker (fzf)" ${key} run-shell "${bin} fzf"
+                    ''
+                  else
+                    ''
+                      bind-key -T prefix -N "agent-sesh: picker" ${key} display-popup -E -b rounded -T "agent-sesh" -s "${style}" -w "${width}" -h "${height}" "${bin}"
+                    ''
+                )
               );
             }
           );

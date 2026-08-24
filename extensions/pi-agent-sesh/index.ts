@@ -62,10 +62,22 @@ async function readRegistry(): Promise<RegistryFile> {
 	}
 }
 
+async function refreshTmuxStatusBar(): Promise<void> {
+	if (!process.env.TMUX) {
+		return;
+	}
+	try {
+		await execFileAsync("tmux", ["refresh-client", "-S"]);
+	} catch {
+		// best-effort; status bar still updates on status-interval
+	}
+}
+
 async function writeRegistry(file: RegistryFile): Promise<void> {
 	const path = registryPath();
 	await mkdir(dirname(path), { recursive: true });
 	await writeFile(path, `${JSON.stringify(file, null, 2)}\n`, "utf8");
+	await refreshTmuxStatusBar();
 }
 
 async function tmuxSessionName(): Promise<string | undefined> {

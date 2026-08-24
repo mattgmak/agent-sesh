@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mattgmak/agent-sesh/internal/counts"
 	"github.com/mattgmak/agent-sesh/internal/debug"
 	"github.com/mattgmak/agent-sesh/internal/picker"
 )
@@ -13,6 +14,33 @@ func main() {
 		switch os.Args[1] {
 		case "list":
 			if err := picker.List(os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			return
+		case "counts":
+			opts := counts.Options{}
+			for i := 2; i < len(os.Args); i++ {
+				switch os.Args[i] {
+				case "--json":
+					opts.JSON = true
+				case "--format":
+					if i+1 >= len(os.Args) {
+						fmt.Fprintln(os.Stderr, "usage: agent-sesh counts [--json] [--format <template>]")
+						os.Exit(2)
+					}
+					opts.Format = os.Args[i+1]
+					i++
+				default:
+					fmt.Fprintln(os.Stderr, "usage: agent-sesh counts [--json] [--format <template>]")
+					os.Exit(2)
+				}
+			}
+			if opts.JSON && opts.Format != "" {
+				fmt.Fprintln(os.Stderr, "agent-sesh counts: --json and --format are mutually exclusive")
+				os.Exit(2)
+			}
+			if err := counts.Run(os.Stdout, opts); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
@@ -73,6 +101,9 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		default:
+			fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
+			os.Exit(2)
 		}
 	}
 
