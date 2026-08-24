@@ -124,8 +124,9 @@ func TestStatusIcon(t *testing.T) {
 		{registry.StatusHalted, iconHalted},
 		{registry.StatusAwaitingInput, iconAwaitingInput},
 		{registry.StatusToolCall, iconStatusToolCall},
+		{registry.StatusUnknown, iconUnknown},
 		{registry.StatusIdle, iconIdle},
-		{registry.Status("unknown"), iconIdle},
+		{registry.Status("unknown"), iconUnknown},
 	}
 
 	for _, tc := range tests {

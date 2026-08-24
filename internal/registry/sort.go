@@ -13,14 +13,16 @@ func StatusPriority(status Status) int {
 		return 0
 	case StatusAwaitingInput:
 		return 1
+	case StatusUnknown:
+		return 2
 	case StatusIdle:
-		return 2
-	case StatusWorking:
 		return 3
-	case StatusToolCall:
+	case StatusWorking:
 		return 4
+	case StatusToolCall:
+		return 5
 	default:
-		return 2
+		return 3
 	}
 }
 

@@ -12,10 +12,11 @@ func TestStatusPriority(t *testing.T) {
 	}{
 		{StatusHalted, 0},
 		{StatusAwaitingInput, 1},
-		{StatusIdle, 2},
-		{StatusWorking, 3},
-		{StatusToolCall, 4},
-		{Status("unknown"), 2},
+		{StatusUnknown, 2},
+		{StatusIdle, 3},
+		{StatusWorking, 4},
+		{StatusToolCall, 5},
+		{Status("bogus"), 3},
 	}
 	for _, tc := range tests {
 		if got := StatusPriority(tc.status); got != tc.want {

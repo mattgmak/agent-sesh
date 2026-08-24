@@ -76,6 +76,8 @@ func statusLabelStyle(status registry.Status) lipgloss.Style {
 		return base.Foreground(lipgloss.ANSIColor(1)).Bold(true)
 	case registry.StatusAwaitingInput:
 		return base.Foreground(lipgloss.Color("220")).Bold(true)
+	case registry.StatusUnknown:
+		return base.Foreground(lipgloss.ANSIColor(6)).Bold(true)
 	default:
 		return base.Foreground(lipgloss.ANSIColor(8))
 	}

@@ -10,7 +10,7 @@ import type {
 	ToolExecutionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -18,6 +18,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 export type AgentSeshStatus =
+	| "unknown"
 	| "idle"
 	| "working"
 	| "tool_call"
@@ -53,6 +54,72 @@ function registryPath(): string {
 	return join(stateHome, "agent-sesh", "sessions.json");
 }
 
+function registryLockPath(): string {
+	return `${registryPath()}.lock`;
+}
+
+const lockPollMs = 25;
+const lockTimeoutMs = 5000;
+
+async function withRegistryLock<T>(fn: () => Promise<T>): Promise<T> {
+	const lockPath = registryLockPath();
+	const deadline = Date.now() + lockTimeoutMs;
+	while (Date.now() < deadline) {
+		try {
+			const handle = await open(lockPath, "wx");
+			try {
+				return await fn();
+			} finally {
+				await handle.close();
+				await unlink(lockPath).catch(() => undefined);
+			}
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+				throw error;
+			}
+			await new Promise((resolve) => setTimeout(resolve, lockPollMs));
+		}
+	}
+	throw new Error(`timed out waiting for registry lock ${lockPath}`);
+}
+
+function sessionUpdatedAfter(
+	a: AgentSeshSession,
+	b: AgentSeshSession,
+): boolean {
+	const at = Date.parse(a.updated_at);
+	const bt = Date.parse(b.updated_at);
+	if (!Number.isNaN(at) && !Number.isNaN(bt)) {
+		return at > bt;
+	}
+	if (!Number.isNaN(at)) {
+		return true;
+	}
+	if (!Number.isNaN(bt)) {
+		return false;
+	}
+	return a.id > b.id;
+}
+
+function mergeSessions(
+	...lists: AgentSeshSession[][]
+): AgentSeshSession[] {
+	const byTarget = new Map<string, AgentSeshSession>();
+	for (const list of lists) {
+		for (const session of list) {
+			const target = session.tmux_target.trim();
+			if (!target) {
+				continue;
+			}
+			const existing = byTarget.get(target);
+			if (!existing || sessionUpdatedAfter(session, existing)) {
+				byTarget.set(target, session);
+			}
+		}
+	}
+	return [...byTarget.values()];
+}
+
 async function readRegistry(): Promise<RegistryFile> {
 	try {
 		const raw = await readFile(registryPath(), "utf8");
@@ -73,11 +140,25 @@ async function refreshTmuxStatusBar(): Promise<void> {
 	}
 }
 
-async function writeRegistry(file: RegistryFile): Promise<void> {
+async function writeRegistryUnlocked(file: RegistryFile): Promise<void> {
 	const path = registryPath();
 	await mkdir(dirname(path), { recursive: true });
-	await writeFile(path, `${JSON.stringify(file, null, 2)}\n`, "utf8");
+	const tmp = `${path}.tmp`;
+	const body = `${JSON.stringify(file, null, 2)}\n`;
+	await writeFile(tmp, body, "utf8");
+	await rename(tmp, path);
 	await refreshTmuxStatusBar();
+}
+
+async function updateRegistry(
+	mutate: (file: RegistryFile) => AgentSeshSession[],
+): Promise<void> {
+	await withRegistryLock(async () => {
+		const latest = await readRegistry();
+		const nextSessions = mutate(latest);
+		const merged = mergeSessions(latest.sessions, nextSessions);
+		await writeRegistryUnlocked({ version: 1, sessions: merged });
+	});
 }
 
 async function tmuxSessionName(): Promise<string | undefined> {
@@ -132,6 +213,23 @@ async function tmuxTarget(): Promise<string | null> {
 		return stdout.trim() || null;
 	} catch {
 		return null;
+	}
+}
+
+async function tmuxPaneCwd(): Promise<string | undefined> {
+	if (!process.env.TMUX) {
+		return undefined;
+	}
+	try {
+		const { stdout } = await execFileAsync("tmux", [
+			"display-message",
+			"-p",
+			"#{pane_current_path}",
+		]);
+		const cwd = stdout.trim();
+		return cwd || undefined;
+	} catch {
+		return undefined;
 	}
 }
 
@@ -204,44 +302,46 @@ export async function upsertSession(partial: {
 	const branch = await gitBranch(partial.cwd);
 	const tmuxSession = await tmuxSessionName();
 	const paneLocation = await tmuxPaneLocation();
-	const file = await readRegistry();
 	const now = new Date().toISOString();
-	const existing = file.sessions.find((session) => session.id === partial.id);
-	const promptUpdated = partial.last_prompt !== undefined;
-	const next: AgentSeshSession = {
-		id: partial.id,
-		tmux_target: target,
-		tmux_session: tmuxSession ?? existing?.tmux_session,
-		tmux_window: paneLocation?.window ?? existing?.tmux_window,
-		tmux_pane: paneLocation?.pane ?? existing?.tmux_pane,
-		cwd: partial.cwd,
-		branch,
-		title: partial.title,
-		last_prompt: partial.last_prompt ?? existing?.last_prompt,
-		last_prompt_at: promptUpdated ? now : existing?.last_prompt_at,
-		status: partial.status ?? existing?.status ?? "idle",
-		tool_name:
-			partial.tool_name === null
-				? undefined
-				: (partial.tool_name ?? existing?.tool_name),
-		model: partial.model ?? existing?.model,
-		agent: "pi",
-		updated_at: now,
-	};
 
-	file.sessions = [
-		next,
-		...file.sessions.filter(
-			(session) => session.id !== partial.id && session.tmux_target !== target,
-		),
-	];
-	await writeRegistry(file);
+	await updateRegistry((file) => {
+		const existing = file.sessions.find((session) => session.id === partial.id);
+		const promptUpdated = partial.last_prompt !== undefined;
+		const next: AgentSeshSession = {
+			id: partial.id,
+			tmux_target: target,
+			tmux_session: tmuxSession ?? existing?.tmux_session,
+			tmux_window: paneLocation?.window ?? existing?.tmux_window,
+			tmux_pane: paneLocation?.pane ?? existing?.tmux_pane,
+			cwd: partial.cwd,
+			branch,
+			title: partial.title,
+			last_prompt: partial.last_prompt ?? existing?.last_prompt,
+			last_prompt_at: promptUpdated ? now : existing?.last_prompt_at,
+			status: partial.status ?? existing?.status ?? "idle",
+			tool_name:
+				partial.tool_name === null
+					? undefined
+					: (partial.tool_name ?? existing?.tool_name),
+			model: partial.model ?? existing?.model,
+			agent: "pi",
+			updated_at: now,
+		};
+
+		return [
+			next,
+			...file.sessions.filter(
+				(session) =>
+					session.id !== partial.id && session.tmux_target !== target,
+			),
+		];
+	});
 }
 
 export async function removeSession(id: string): Promise<void> {
-	const file = await readRegistry();
-	file.sessions = file.sessions.filter((session) => session.id !== id);
-	await writeRegistry(file);
+	await updateRegistry((file) =>
+		file.sessions.filter((session) => session.id !== id),
+	);
 }
 
 export async function setStatus(
@@ -252,20 +352,41 @@ export async function setStatus(
 	const file = await readRegistry();
 	const idx = file.sessions.findIndex((entry) => entry.id === id);
 	if (idx < 0) {
+		const target = await tmuxTarget();
+		const cwd = await tmuxPaneCwd();
+		if (!target || !cwd) {
+			return;
+		}
+		await upsertSession({
+			id,
+			cwd,
+			title: basename(cwd),
+			status,
+			tool_name: toolName ?? null,
+		});
 		return;
 	}
-	const session = file.sessions[idx];
-	session.status = status;
-	if (toolName === null) {
-		delete session.tool_name;
-	} else if (toolName !== undefined) {
-		session.tool_name = toolName;
-	} else if (status !== "tool_call") {
-		delete session.tool_name;
-	}
-	session.updated_at = new Date().toISOString();
-	file.sessions = [session, ...file.sessions.filter((_, i) => i !== idx)];
-	await writeRegistry(file);
+
+	await updateRegistry((current) => {
+		const currentIdx = current.sessions.findIndex((entry) => entry.id === id);
+		if (currentIdx < 0) {
+			return current.sessions;
+		}
+		const session = { ...current.sessions[currentIdx] };
+		session.status = status;
+		if (toolName === null) {
+			delete session.tool_name;
+		} else if (toolName !== undefined) {
+			session.tool_name = toolName;
+		} else if (status !== "tool_call") {
+			delete session.tool_name;
+		}
+		session.updated_at = new Date().toISOString();
+		return [
+			session,
+			...current.sessions.filter((_, i) => i !== currentIdx),
+		];
+	});
 }
 
 export default function piAgentSeshExtension(pi: ExtensionAPI): void {
@@ -380,15 +501,7 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 			if (!id) {
 				return;
 			}
-			const target = await tmuxTarget();
 			await removeSession(id);
-			if (target) {
-				const file = await readRegistry();
-				file.sessions = file.sessions.filter(
-					(session) => session.tmux_target !== target,
-				);
-				await writeRegistry(file);
-			}
 			sessionId = undefined;
 		},
 	);

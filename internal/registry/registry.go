@@ -14,6 +14,7 @@ const sessionsFileName = "sessions.json"
 type Status string
 
 const (
+	StatusUnknown       Status = "unknown"
 	StatusIdle          Status = "idle"
 	StatusWorking       Status = "working"
 	StatusToolCall      Status = "tool_call"
@@ -24,7 +25,7 @@ const (
 // NormalizeStatus maps legacy status strings to canonical values.
 func NormalizeStatus(status Status) Status {
 	switch status {
-	case StatusIdle, StatusWorking, StatusToolCall, StatusHalted, StatusAwaitingInput:
+	case StatusUnknown, StatusIdle, StatusWorking, StatusToolCall, StatusHalted, StatusAwaitingInput:
 		return status
 	case "waiting":
 		return StatusHalted
@@ -103,6 +104,17 @@ func Save(path string, sessions []Session) error {
 	if path == "" {
 		return fmt.Errorf("registry path is empty")
 	}
+	return withRegistryLock(path, func() error {
+		existing, err := Load(path)
+		if err != nil {
+			return err
+		}
+		merged := MergeSessions(existing, filterPersistable(sessions))
+		return saveUnlocked(path, merged)
+	})
+}
+
+func saveUnlocked(path string, sessions []Session) error {
 	file := File{Version: 1, Sessions: sessions}
 	data, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {
@@ -112,7 +124,11 @@ func Save(path string, sessions []Session) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func PruneMissingPanes(sessions []Session, paneExists func(string) bool) []Session {

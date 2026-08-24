@@ -15,17 +15,6 @@ func sanitizeOptsFromSnapshot(snap *tmux.Snapshot) registry.SanitizeOptions {
 			}
 			return tmux.PaneExists(target)
 		},
-		HasAgent: func(target, agent string) bool {
-			switch agent {
-			case "", "pi":
-				if snap != nil && snap.HasPiAgent(target) {
-					return true
-				}
-				return tmux.PaneHasPiAgent(target)
-			default:
-				return false
-			}
-		},
 	}
 }
 
@@ -46,7 +35,7 @@ func loadSessionsFromSnapshot(path string, snap *tmux.Snapshot, discover bool) (
 		return nil, err
 	}
 	sanitized, pruned := registry.Sanitize(sessions, sanitizeOptsFromSnapshot(snap))
-	if len(pruned) > 0 || len(sanitized) != len(sessions) {
+	if registry.ShouldPersistSanitize(sessions, sanitized, pruned) {
 		_ = registry.Save(path, sanitized)
 	}
 	out := sanitized

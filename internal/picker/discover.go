@@ -49,7 +49,7 @@ func mergeDiscoveredSessions(registered []registry.Session, snap *tmux.Snapshot)
 			CWD:         info.CurrentPath,
 			Title:       title,
 			Agent:       "pi",
-			Status:      registry.StatusIdle,
+			Status:      registry.StatusUnknown,
 		})
 	}
 

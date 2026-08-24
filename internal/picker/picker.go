@@ -30,6 +30,7 @@ const (
 
 // Nerd Font codepoints (MDI from bin/scripts/lib/i_md.sh, FA from i_fa.sh).
 const (
+	iconUnknown        = "\U000F0625" // 󰘥 help-circle-outline
 	iconIdle           = "\U000F04B2" // 󰒲 (user choice)
 	iconWorking        = "\U000F09D1" // 󰧑 brain
 	iconToolCall       = "\U000F1322" // 󱌢 hammer-screwdriver (tool metadata)
@@ -745,6 +746,8 @@ func statusIcon(status registry.Status) string {
 		return iconAwaitingInput
 	case registry.StatusToolCall:
 		return iconStatusToolCall
+	case registry.StatusUnknown:
+		return iconUnknown
 	default:
 		return iconIdle
 	}

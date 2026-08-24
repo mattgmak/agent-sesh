@@ -6,6 +6,7 @@ type Category string
 const (
 	CategoryAttention Category = "attention"
 	CategoryActive    Category = "active"
+	CategoryUnknown   Category = "unknown"
 	CategoryIdle      Category = "idle"
 )
 
@@ -16,6 +17,8 @@ func StatusCategory(status Status) Category {
 		return CategoryAttention
 	case StatusWorking, StatusToolCall:
 		return CategoryActive
+	case StatusUnknown:
+		return CategoryUnknown
 	default:
 		return CategoryIdle
 	}
@@ -37,6 +40,8 @@ func CountByCategory(sessions []Session) CategoryCounts {
 			counts.Attention++
 		case CategoryActive:
 			counts.Active++
+		case CategoryUnknown:
+			// Picker-only discovered rows; not counted in status bar buckets.
 		default:
 			counts.Idle++
 		}

@@ -11,8 +11,9 @@ func TestStatusCategory(t *testing.T) {
 		{StatusAwaitingInput, CategoryAttention},
 		{StatusWorking, CategoryActive},
 		{StatusToolCall, CategoryActive},
+		{StatusUnknown, CategoryUnknown},
 		{StatusIdle, CategoryIdle},
-		{Status("unknown"), CategoryIdle},
+		{Status("unknown"), CategoryUnknown},
 	}
 	for _, tc := range tests {
 		if got := StatusCategory(tc.status); got != tc.want {
