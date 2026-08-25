@@ -318,10 +318,31 @@ export async function upsertSession(partial: {
 	});
 }
 
-export async function removeSession(id: string): Promise<void> {
-	await updateRegistry((file) =>
-		file.sessions.filter((session) => session.id !== id),
-	);
+export async function removeSession(
+	id?: string,
+	tmuxPaneTarget?: string | null,
+): Promise<void> {
+	const paneTarget = tmuxPaneTarget?.trim();
+	if (!id && !paneTarget) {
+		return;
+	}
+
+	await withRegistryLock(async () => {
+		const latest = await readRegistry();
+		const nextSessions = latest.sessions.filter((session) => {
+			if (id && session.id === id) {
+				return false;
+			}
+			if (paneTarget && session.tmux_target === paneTarget) {
+				return false;
+			}
+			return true;
+		});
+		if (nextSessions.length === latest.sessions.length) {
+			return;
+		}
+		await writeRegistryUnlocked({ version: 1, sessions: nextSessions });
+	});
 }
 
 export async function setStatus(
@@ -478,10 +499,11 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 		"session_shutdown",
 		async (_event: SessionShutdownEvent, ctx: ExtensionContext) => {
 			const id = requireSessionId(ctx);
-			if (!id) {
+			const target = await tmuxTarget();
+			if (!id && !target) {
 				return;
 			}
-			await removeSession(id);
+			await removeSession(id, target);
 			sessionId = undefined;
 		},
 	);
