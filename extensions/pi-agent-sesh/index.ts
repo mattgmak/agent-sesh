@@ -10,10 +10,11 @@ import type {
 	ToolExecutionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import { execFile } from "node:child_process";
-import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { withRegistryFileLock } from "./registry-lock.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -58,29 +59,8 @@ function registryLockPath(): string {
 	return `${registryPath()}.lock`;
 }
 
-const lockPollMs = 25;
-const lockTimeoutMs = 5000;
-
 async function withRegistryLock<T>(fn: () => Promise<T>): Promise<T> {
-	const lockPath = registryLockPath();
-	const deadline = Date.now() + lockTimeoutMs;
-	while (Date.now() < deadline) {
-		try {
-			const handle = await open(lockPath, "wx");
-			try {
-				return await fn();
-			} finally {
-				await handle.close();
-				await unlink(lockPath).catch(() => undefined);
-			}
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-				throw error;
-			}
-			await new Promise((resolve) => setTimeout(resolve, lockPollMs));
-		}
-	}
-	throw new Error(`timed out waiting for registry lock ${lockPath}`);
+	return withRegistryFileLock(registryLockPath(), fn);
 }
 
 function sessionUpdatedAfter(

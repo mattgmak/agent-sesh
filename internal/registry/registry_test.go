@@ -19,6 +19,36 @@ func TestLoadMissingFile(t *testing.T) {
 	}
 }
 
+func TestSaveDoesNotResurrectPrunedSessions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	stale := []Session{
+		{ID: "stale", TmuxTarget: "%1", Status: StatusIdle, Agent: "pi"},
+		{ID: "live", TmuxTarget: "%2", Status: StatusWorking, Agent: "pi"},
+	}
+	if err := saveUnlocked(path, stale); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	pruned := []Session{
+		{ID: "live", TmuxTarget: "%2", Status: StatusWorking, Agent: "pi"},
+	}
+	if err := Save(path, pruned); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+	if got[0].ID != "live" {
+		t.Fatalf("got %+v, want only live session", got[0])
+	}
+}
+
 func TestSaveAndLoad(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sessions.json")

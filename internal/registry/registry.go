@@ -105,12 +105,7 @@ func Save(path string, sessions []Session) error {
 		return fmt.Errorf("registry path is empty")
 	}
 	return withRegistryLock(path, func() error {
-		existing, err := Load(path)
-		if err != nil {
-			return err
-		}
-		merged := MergeSessions(existing, filterPersistable(sessions))
-		return saveUnlocked(path, merged)
+		return saveUnlocked(path, filterPersistable(sessions))
 	})
 }
 
