@@ -11,7 +11,7 @@ const lockPollInterval = 25 * time.Millisecond
 const lockTimeout = 5 * time.Second
 
 // withRegistryLock uses advisory flock on path+".lock". The pi-agent-sesh
-// extension uses flock-hold.py with the same lock file (see registry-lock.ts).
+// extension uses the same lock file via koffi (see registry-lock.ts).
 func withRegistryLock(path string, fn func() error) error {
 	lockPath := path + ".lock"
 	deadline := time.Now().Add(lockTimeout)
