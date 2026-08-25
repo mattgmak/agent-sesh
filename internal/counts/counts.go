@@ -7,6 +7,7 @@ import (
 	"text/template"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
+	"github.com/mattgmak/agent-sesh/internal/tmux"
 )
 
 // Nerd Font icons — same codepoints as the picker status display.
@@ -35,7 +36,7 @@ type TemplateData struct {
 	IdleIcon      string
 }
 
-// LoadAndCount reads the registry without tmux discovery and returns category totals.
+// LoadAndCount reads the registry and returns category totals for live pi sessions.
 func LoadAndCount() (registry.CategoryCounts, error) {
 	path, err := registry.DefaultPath()
 	if err != nil {
@@ -45,7 +46,7 @@ func LoadAndCount() (registry.CategoryCounts, error) {
 	if err != nil {
 		return registry.CategoryCounts{}, err
 	}
-	sanitized, _ := registry.Sanitize(sessions, registry.SanitizeOptions{})
+	sanitized, _ := registry.Sanitize(sessions, tmux.RegistrySanitizeOptions(nil))
 	return registry.CountByCategory(sanitized), nil
 }
 

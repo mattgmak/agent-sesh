@@ -12,17 +12,7 @@ import (
 )
 
 func defaultSanitizeOpts() registry.SanitizeOptions {
-	return registry.SanitizeOptions{
-		PaneExists: tmux.PaneExists,
-		HasAgent: func(target, agent string) bool {
-			switch strings.TrimSpace(agent) {
-			case "", "pi":
-				return tmux.PaneHasPiAgent(target)
-			default:
-				return false
-			}
-		},
-	}
+	return tmux.RegistrySanitizeOptions(nil)
 }
 
 // Registry prints the raw sessions.json contents.

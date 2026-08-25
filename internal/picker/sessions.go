@@ -8,14 +8,7 @@ import (
 )
 
 func sanitizeOptsFromSnapshot(snap *tmux.Snapshot) registry.SanitizeOptions {
-	return registry.SanitizeOptions{
-		PaneExists: func(target string) bool {
-			if snap != nil && snap.HasPane(target) {
-				return true
-			}
-			return tmux.PaneExists(target)
-		},
-	}
+	return tmux.RegistrySanitizeOptions(snap)
 }
 
 func loadSessionsFast(path string) ([]registry.Session, error) {
@@ -24,7 +17,7 @@ func loadSessionsFast(path string) ([]registry.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	sanitized, _ := registry.Sanitize(sessions, registry.SanitizeOptions{})
+	sanitized, _ := registry.Sanitize(sessions, tmux.RegistrySanitizeOptions(nil))
 	registry.SortSessions(sanitized)
 	return sanitized, nil
 }
