@@ -18,7 +18,7 @@ const (
 )
 
 // DefaultFormat is used when --format is omitted.
-const DefaultFormat = "{{.AttentionIcon}}{{.Attention}} {{.ActiveIcon}}{{.Active}} {{.IdleIcon}}{{.Idle}}"
+const DefaultFormat = "{{.AttentionIcon}} {{.Attention}} {{.ActiveIcon}} {{.Active}} {{.IdleIcon}} {{.Idle}}"
 
 // Options configures counts output.
 type Options struct {

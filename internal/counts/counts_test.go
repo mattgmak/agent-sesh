@@ -15,7 +15,7 @@ func TestWriteDefaultFormat(t *testing.T) {
 	if err := Write(&buf, Options{}, counts); err != nil {
 		t.Fatal(err)
 	}
-	want := iconAttention + "2 " + iconActive + "5 " + iconIdle + "1"
+	want := iconAttention + " 2 " + iconActive + " 5 " + iconIdle + " 1"
 	if got := buf.String(); got != want {
 		t.Fatalf("default output = %q, want %q", got, want)
 	}
