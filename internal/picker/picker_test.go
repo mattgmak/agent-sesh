@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
 )
@@ -287,6 +288,38 @@ func TestCyclicCursorWrapsBothEnds(t *testing.T) {
 	m = m.setCursor(m.cursor - 1)
 	if m.cursor != n-1 || m.selectedID != items[n-1].ID {
 		t.Fatalf("down from first: want cursor %d / id %q, got %d / %q", n-1, items[n-1].ID, m.cursor, m.selectedID)
+	}
+}
+
+func TestFzfNavigationKeysMoveCursor(t *testing.T) {
+	tests := []struct {
+		name string
+		key  tea.KeyPressMsg
+		want int
+	}{
+		{name: "ctrl+p up", key: tea.KeyPressMsg{Mod: tea.ModCtrl, Code: 'p'}, want: 1},
+		{name: "ctrl+k up", key: tea.KeyPressMsg{Mod: tea.ModCtrl, Code: 'k'}, want: 1},
+		{name: "ctrl+n down", key: tea.KeyPressMsg{Mod: tea.ModCtrl, Code: 'n'}, want: 2},
+		{name: "ctrl+j down", key: tea.KeyPressMsg{Mod: tea.ModCtrl, Code: 'j'}, want: 2},
+		{name: "tab down", key: tea.KeyPressMsg{Code: tea.KeyTab}, want: 2},
+		{name: "shift+tab up", key: tea.KeyPressMsg{Mod: tea.ModShift, Code: tea.KeyTab}, want: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := testModel(sampleSessions())
+			registry.SortSessions(m.sessions)
+			items := m.filteredSessions()
+			m.cursor = 0
+			m.selectedID = items[0].ID
+			m.reconcileCursor()
+
+			updated, _ := m.Update(tt.key)
+			got := updated.(model)
+			if got.cursor != tt.want {
+				t.Fatalf("cursor = %d, want %d", got.cursor, tt.want)
+			}
+		})
 	}
 }
 

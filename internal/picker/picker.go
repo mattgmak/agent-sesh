@@ -630,10 +630,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.quitting = true
 			return m, tea.Quit
-		case "up", "k":
+		case "up", "ctrl+p", "ctrl+k", "shift+tab":
 			m = m.setCursor(m.cursor + 1)
 			return m, m.schedulePreview()
-		case "down", "j":
+		case "down", "ctrl+n", "ctrl+j", "tab":
 			m = m.setCursor(m.cursor - 1)
 			return m, m.schedulePreview()
 		case "enter":
