@@ -232,9 +232,9 @@ func TestPreviewLoadingOnlyBeforeFirstFetch(t *testing.T) {
 		t.Fatalf("expected loading before first preview, got:\n%s", out)
 	}
 
-	m.previewName = "1"
+	m.previewTarget = "%1"
 	m.previewContent = "\x1b[31mcolored\x1b[0m"
-	m.previewPending = "2"
+	m.previewPending = "%2"
 
 	out = viewContent(m)
 	if strings.Contains(out, "Loading preview") {

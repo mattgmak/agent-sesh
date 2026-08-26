@@ -58,9 +58,10 @@ type tickMsg struct{}
 type discoveryTickMsg struct{}
 
 type previewRefreshMsg struct {
-	seq int
-	id  string
-	rev string
+	seq    int
+	id     string
+	target string
+	rev    string
 }
 
 type previewLiveTickMsg struct{}
@@ -73,6 +74,7 @@ type discoveryLoadedMsg struct {
 type previewLoadedMsg struct {
 	seq      int
 	id       string
+	target   string
 	revision string
 	content  string
 	err      error
@@ -87,6 +89,7 @@ type model struct {
 	sessions          []registry.Session
 	cursor            int
 	selectedID        string
+	selectedTarget    string
 	filter            textinput.Model
 	rename            textinput.Model
 	mode              mode
@@ -100,6 +103,7 @@ type model struct {
 	previewErr        error
 	previewPending    string
 	previewName       string
+	previewTarget     string
 	previewRevision   string
 	previewSeq        int
 	loading           bool
@@ -278,13 +282,25 @@ func (m *model) reconcileCursor() {
 	if len(items) == 0 {
 		m.cursor = 0
 		m.selectedID = ""
+		m.selectedTarget = ""
 		return
+	}
+
+	if m.selectedTarget != "" {
+		for i, session := range items {
+			if session.TmuxTarget == m.selectedTarget {
+				m.cursor = i
+				m.selectedID = session.ID
+				return
+			}
+		}
 	}
 
 	if m.selectedID != "" {
 		for i, session := range items {
 			if session.ID == m.selectedID {
 				m.cursor = i
+				m.selectedTarget = session.TmuxTarget
 				return
 			}
 		}
@@ -292,7 +308,7 @@ func (m *model) reconcileCursor() {
 
 	// Default to the bottom-most entry (highest priority: halted, awaiting_input)
 	// when there is no prior selection to restore.
-	if m.selectedID == "" {
+	if m.selectedID == "" && m.selectedTarget == "" {
 		m.cursor = 0
 	}
 	if m.cursor >= len(items) {
@@ -302,6 +318,7 @@ func (m *model) reconcileCursor() {
 		m.cursor = 0
 	}
 	m.selectedID = items[m.cursor].ID
+	m.selectedTarget = items[m.cursor].TmuxTarget
 }
 
 func (m model) splitActive() bool {
@@ -315,30 +332,36 @@ func (m *model) schedulePreview() tea.Cmd {
 func (m *model) schedulePreviewOpts(immediate bool) tea.Cmd {
 	if !m.splitActive() {
 		m.previewSeq++
-		m.previewName, m.previewPending, m.previewContent, m.previewErr, m.previewRevision = "", "", "", nil, ""
+		m.previewName, m.previewTarget, m.previewPending, m.previewContent, m.previewErr, m.previewRevision = "", "", "", "", nil, ""
 		return nil
 	}
 
 	session, ok := m.selected()
 	if !ok {
 		m.previewSeq++
-		m.previewName, m.previewPending, m.previewContent, m.previewErr, m.previewRevision = "", "", "", nil, ""
+		m.previewName, m.previewTarget, m.previewPending, m.previewContent, m.previewErr, m.previewRevision = "", "", "", "", nil, ""
 		return nil
 	}
 
 	id := session.ID
+	target := strings.TrimSpace(session.TmuxTarget)
 	rev := previewRevision(session)
-	if id == m.previewName && rev == m.previewRevision && m.previewPending == "" {
+	if target == m.previewTarget && rev == m.previewRevision && m.previewPending == "" {
 		return nil
 	}
-	if id == m.previewPending {
+	if target != "" && m.previewPending == target {
 		return nil
 	}
 
-	target := strings.TrimSpace(session.TmuxTarget)
 	if content, err, hit := getPreviewCache(target, rev); hit {
 		profileNote("schedulePreview", "cache hit "+target)
+		if target != m.previewTarget {
+			// Invalidate in-flight captures for the previous pane (same tmux
+			// window, different pane is a common case).
+			m.previewSeq++
+		}
 		m.previewName = id
+		m.previewTarget = target
 		m.previewRevision = rev
 		m.previewContent = content
 		m.previewErr = err
@@ -348,27 +371,28 @@ func (m *model) schedulePreviewOpts(immediate bool) tea.Cmd {
 
 	if content, _, hit, err := getPreviewCacheAny(target); hit {
 		m.previewName = id
+		m.previewTarget = target
 		m.previewContent = content
 		m.previewErr = err
 	}
 
-	if !immediate && id == m.previewName && m.previewContent != "" {
+	if !immediate && target == m.previewTarget && m.previewContent != "" {
 		if elapsed := time.Since(m.previewLastFetch); elapsed < previewMinRefreshInterval {
-			if m.previewPending == id {
+			if m.previewPending == target {
 				return nil
 			}
 			wait := previewMinRefreshInterval - elapsed
 			m.previewSeq++
 			seq := m.previewSeq
-			m.previewPending = id
+			m.previewPending = target
 			return tea.Tick(wait, func(time.Time) tea.Msg {
-				return previewRefreshMsg{seq: seq, id: id, rev: rev}
+				return previewRefreshMsg{seq: seq, id: id, target: target, rev: rev}
 			})
 		}
 	}
 
 	m.previewSeq++
-	m.previewPending = id
+	m.previewPending = target
 	seq := m.previewSeq
 	m.previewLastFetch = time.Now()
 	return m.fetchPreview(seq, id, target, rev)
@@ -383,11 +407,11 @@ func (m *model) forcePreviewRefresh() tea.Cmd {
 		return nil
 	}
 	id := session.ID
-	if m.previewPending == id {
-		return nil
-	}
 	target := strings.TrimSpace(session.TmuxTarget)
 	if target == "" {
+		return nil
+	}
+	if m.previewPending == target {
 		return nil
 	}
 	if time.Since(m.previewLastFetch) < previewLiveRefreshInterval {
@@ -395,7 +419,7 @@ func (m *model) forcePreviewRefresh() tea.Cmd {
 	}
 	rev := previewRevision(session)
 	m.previewSeq++
-	m.previewPending = id
+	m.previewPending = target
 	seq := m.previewSeq
 	m.previewLastFetch = time.Now()
 	return m.fetchPreview(seq, id, target, rev)
@@ -405,11 +429,11 @@ func (m model) fetchPreview(seq int, id, target, revision string) tea.Cmd {
 	return func() tea.Msg {
 		defer profileStart("fetchPreview " + target)()
 		if target == "" {
-			return previewLoadedMsg{seq: seq, id: id, revision: revision, content: "", err: nil}
+			return previewLoadedMsg{seq: seq, id: id, target: target, revision: revision, content: "", err: nil}
 		}
 		content, err := tmux.CapturePane(target, 0)
 		setPreviewCache(target, revision, content, err)
-		return previewLoadedMsg{seq: seq, id: id, revision: revision, content: content, err: err}
+		return previewLoadedMsg{seq: seq, id: id, target: target, revision: revision, content: content, err: err}
 	}
 }
 
@@ -459,6 +483,7 @@ func (m model) setCursor(index int) model {
 	if len(items) == 0 {
 		m.cursor = 0
 		m.selectedID = ""
+		m.selectedTarget = ""
 		return m
 	}
 	// Cyclic scrolling: wrap around both ends instead of clamping.
@@ -466,6 +491,7 @@ func (m model) setCursor(index int) model {
 	index = ((index % len(items)) + len(items)) % len(items)
 	m.cursor = index
 	m.selectedID = items[index].ID
+	m.selectedTarget = items[index].TmuxTarget
 	return m
 }
 
@@ -483,12 +509,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.seq != m.previewSeq {
 			return m, nil
 		}
-		if msg.id == m.previewName && msg.revision == m.previewRevision && msg.content == m.previewContent && msg.err == m.previewErr {
+		session, ok := m.selected()
+		if !ok || session.TmuxTarget != msg.target {
+			return m, nil
+		}
+		if msg.target == m.previewTarget && msg.revision == m.previewRevision && msg.content == m.previewContent && msg.err == m.previewErr {
 			m.previewPending = ""
 			return m, nil
 		}
 		m.previewPending = ""
 		m.previewName = msg.id
+		m.previewTarget = msg.target
 		m.previewRevision = msg.revision
 		m.previewContent = msg.content
 		m.previewErr = msg.err
@@ -499,7 +530,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		session, ok := m.selected()
-		if !ok || session.ID != msg.id {
+		if !ok || session.TmuxTarget != msg.target {
 			return m, nil
 		}
 		if previewRevision(session) != msg.rev {
@@ -817,7 +848,7 @@ func (m model) View() tea.View {
 			cols,
 			visible+footerLines,
 			m.previewErr,
-			m.previewName == "",
+			m.previewTarget == "",
 		)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, preview)
 	} else {

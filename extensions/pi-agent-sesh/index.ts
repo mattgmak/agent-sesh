@@ -345,15 +345,32 @@ export async function removeSession(
 	});
 }
 
+function findSessionIndex(
+	sessions: AgentSeshSession[],
+	id: string,
+	tmuxTarget?: string | null,
+): number {
+	if (tmuxTarget) {
+		const byTarget = sessions.findIndex(
+			(entry) => entry.tmux_target === tmuxTarget,
+		);
+		if (byTarget >= 0) {
+			return byTarget;
+		}
+	}
+	return sessions.findIndex((entry) => entry.id === id);
+}
+
 export async function setStatus(
 	id: string,
 	status: AgentSeshStatus,
 	toolName?: string | null,
+	opts?: { skipWorkingIfHalted?: boolean },
 ): Promise<void> {
+	const target = await tmuxTarget();
 	const file = await readRegistry();
-	const idx = file.sessions.findIndex((entry) => entry.id === id);
+	const idx = findSessionIndex(file.sessions, id, target);
 	if (idx < 0) {
-		const target = await tmuxTarget();
 		const cwd = await tmuxPaneCwd();
 		if (!target || !cwd) {
 			return;
@@ -369,11 +386,18 @@ export async function setStatus(
 	}
 
 	await updateRegistry((current) => {
-		const currentIdx = current.sessions.findIndex((entry) => entry.id === id);
+		const currentIdx = findSessionIndex(current.sessions, id, target);
 		if (currentIdx < 0) {
 			return current.sessions;
 		}
 		const session = { ...current.sessions[currentIdx] };
+		if (
+			opts?.skipWorkingIfHalted &&
+			session.status === "halted" &&
+			status === "working"
+		) {
+			return current.sessions;
+		}
 		session.status = status;
 		if (toolName === null) {
 			delete session.tool_name;
@@ -444,7 +468,12 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 			if (!id) {
 				return;
 			}
-			await setStatus(id, "working");
+			// Parallel tools + async registry writes: a late tool_execution_end can
+			// finish after agent_settled and overwrite halted with working.
+			if (ctx.isIdle()) {
+				return;
+			}
+			await setStatus(id, "working", undefined, { skipWorkingIfHalted: true });
 		},
 	);
 
