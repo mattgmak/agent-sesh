@@ -33,6 +33,31 @@ func TestSchedulePreviewNavigateDefersFetch(t *testing.T) {
 	}
 }
 
+func TestSchedulePreviewNavigateFetchesImmediatelyWithoutCache(t *testing.T) {
+	sessions := sampleSessions()
+	for _, s := range sessions {
+		invalidatePreviewCache(s.TmuxTarget)
+	}
+
+	m := testModel(sessions)
+	m.width = 120
+	m.height = 24
+	m.syncInputWidth()
+	m.previewTarget = sessions[0].TmuxTarget
+	m.previewContent = "old pane body"
+
+	cmd := (&m).schedulePreviewNavigate()
+	if cmd == nil {
+		t.Fatal("expected immediate fetch command")
+	}
+	if m.previewContent != "" {
+		t.Fatalf("expected cleared preview, got %q", m.previewContent)
+	}
+	if m.previewPending != sessions[0].TmuxTarget {
+		t.Fatalf("pending = %q", m.previewPending)
+	}
+}
+
 func TestSchedulePreviewNavigateExactCacheSkipsFetch(t *testing.T) {
 	session := sampleSessions()[0]
 	invalidatePreviewCache(session.TmuxTarget)

@@ -26,6 +26,7 @@ const (
 	registryReloadDebounce     = 200 * time.Millisecond
 	discoveryRefreshInterval   = 30 * time.Second
 	previewMinRefreshInterval  = 1200 * time.Millisecond
+	previewNavigateDebounce    = 200 * time.Millisecond
 	previewLiveRefreshInterval = 2 * time.Second
 )
 
@@ -385,30 +386,48 @@ func (m *model) schedulePreviewOpts(mode previewScheduleMode) tea.Cmd {
 		return nil
 	}
 
-	if content, _, hit, err := getPreviewCacheAny(target); hit {
-		m.previewName = id
-		m.previewTarget = target
-		m.previewContent = content
-		m.previewErr = err
-	}
+	staleContent, _, staleHit, staleErr := getPreviewCacheAny(target)
+	switchingPane := target != m.previewTarget
 
 	if mode == previewScheduleNavigate {
-		if target != m.previewTarget {
+		if switchingPane {
 			m.previewSeq++
 		}
 		m.previewName = id
 		m.previewTarget = target
 		m.previewRevision = rev
+		if staleHit {
+			m.previewContent = staleContent
+			m.previewErr = staleErr
+		} else {
+			m.previewContent = ""
+			m.previewErr = nil
+		}
 		if m.previewPending == target {
 			return nil
+		}
+		// No cached pane text → fetch now so we don't show the previous pane.
+		if !staleHit {
+			m.previewSeq++
+			m.previewPending = target
+			seq := m.previewSeq
+			m.previewLastFetch = time.Now()
+			return m.fetchPreview(seq, id, target, rev)
 		}
 		m.previewSeq++
 		seq := m.previewSeq
 		m.previewPending = target
 		profileNote("schedulePreview", "deferred navigate "+target)
-		return tea.Tick(previewMinRefreshInterval, func(time.Time) tea.Msg {
+		return tea.Tick(previewNavigateDebounce, func(time.Time) tea.Msg {
 			return previewRefreshMsg{seq: seq, id: id, target: target, rev: rev}
 		})
+	}
+
+	if staleHit {
+		m.previewName = id
+		m.previewTarget = target
+		m.previewContent = staleContent
+		m.previewErr = staleErr
 	}
 
 	immediate := mode == previewScheduleImmediate
