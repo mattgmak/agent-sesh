@@ -23,6 +23,7 @@ const (
 
 const (
 	registryRefreshInterval    = 3 * time.Second
+	registryReloadDebounce     = 200 * time.Millisecond
 	discoveryRefreshInterval   = 30 * time.Second
 	previewMinRefreshInterval  = 1200 * time.Millisecond
 	previewLiveRefreshInterval = 2 * time.Second
@@ -55,6 +56,8 @@ const (
 
 type tickMsg struct{}
 
+type registryReloadMsg struct{}
+
 type discoveryTickMsg struct{}
 
 type previewRefreshMsg struct {
@@ -85,31 +88,40 @@ type sessionsLoadedMsg struct {
 	err      error
 }
 
+type previewScheduleMode int
+
+const (
+	previewScheduleNormal previewScheduleMode = iota
+	previewScheduleNavigate
+	previewScheduleImmediate
+)
+
 type model struct {
-	sessions          []registry.Session
-	cursor            int
-	selectedID        string
-	selectedTarget    string
-	filter            textinput.Model
-	rename            textinput.Model
-	mode              mode
-	width             int
-	height            int
-	registry          string
-	statusLine        string
-	quitting          bool
-	attach            bool
-	previewContent    string
-	previewErr        error
-	previewPending    string
-	previewName       string
-	previewTarget     string
-	previewRevision   string
-	previewSeq        int
-	loading           bool
-	registryMtime     time.Time
-	sessionsRenderKey string
-	previewLastFetch  time.Time
+	sessions              []registry.Session
+	cursor                int
+	selectedID            string
+	selectedTarget        string
+	filter                textinput.Model
+	rename                textinput.Model
+	mode                  mode
+	width                 int
+	height                int
+	registry              string
+	statusLine            string
+	quitting              bool
+	attach                bool
+	previewContent        string
+	previewErr            error
+	previewPending        string
+	previewName           string
+	previewTarget         string
+	previewRevision       string
+	previewSeq            int
+	loading               bool
+	registryMtime         time.Time
+	registryReloadPending bool
+	sessionsRenderKey     string
+	previewLastFetch      time.Time
 }
 
 func Run() error {
@@ -326,10 +338,14 @@ func (m model) splitActive() bool {
 }
 
 func (m *model) schedulePreview() tea.Cmd {
-	return m.schedulePreviewOpts(false)
+	return m.schedulePreviewOpts(previewScheduleNormal)
 }
 
-func (m *model) schedulePreviewOpts(immediate bool) tea.Cmd {
+func (m *model) schedulePreviewNavigate() tea.Cmd {
+	return m.schedulePreviewOpts(previewScheduleNavigate)
+}
+
+func (m *model) schedulePreviewOpts(mode previewScheduleMode) tea.Cmd {
 	if !m.splitActive() {
 		m.previewSeq++
 		m.previewName, m.previewTarget, m.previewPending, m.previewContent, m.previewErr, m.previewRevision = "", "", "", "", nil, ""
@@ -376,6 +392,26 @@ func (m *model) schedulePreviewOpts(immediate bool) tea.Cmd {
 		m.previewErr = err
 	}
 
+	if mode == previewScheduleNavigate {
+		if target != m.previewTarget {
+			m.previewSeq++
+		}
+		m.previewName = id
+		m.previewTarget = target
+		m.previewRevision = rev
+		if m.previewPending == target {
+			return nil
+		}
+		m.previewSeq++
+		seq := m.previewSeq
+		m.previewPending = target
+		profileNote("schedulePreview", "deferred navigate "+target)
+		return tea.Tick(previewMinRefreshInterval, func(time.Time) tea.Msg {
+			return previewRefreshMsg{seq: seq, id: id, target: target, rev: rev}
+		})
+	}
+
+	immediate := mode == previewScheduleImmediate
 	if !immediate && target == m.previewTarget && m.previewContent != "" {
 		if elapsed := time.Since(m.previewLastFetch); elapsed < previewMinRefreshInterval {
 			if m.previewPending == target {
@@ -444,27 +480,24 @@ func (m model) reload() model {
 		m.statusLine = err.Error()
 		return m
 	}
-	snap, _ := tmux.GetSnapshot(false)
-	sanitized, _ := registry.Sanitize(fresh, tmux.RegistrySanitizeOptions(snap))
-	next := refreshSessionsFromRegistry(m.sessions, sanitized)
+	next := refreshSessionsFromRegistry(m.sessions, fresh)
 	if !m.applySessionsIfChanged(next) {
+		profileNote("reload", "noop")
 		return m
 	}
 	m.reconcileCursor()
 	return m
 }
 
-func (m model) reloadIfChanged() (model, bool) {
+func (m model) registryFileChanged() bool {
 	info, err := os.Stat(m.registry)
-	if err == nil && !m.registryMtime.IsZero() && info.ModTime().Equal(m.registryMtime) {
-		return m, false
+	if err != nil {
+		return false
 	}
-	prevKey := m.sessionsRenderKey
-	m = m.reload()
-	if err == nil {
-		m.registryMtime = info.ModTime()
+	if m.registryMtime.IsZero() {
+		return true
 	}
-	return m, m.sessionsRenderKey != prevKey
+	return info.ModTime().After(m.registryMtime)
 }
 
 func (m model) reloadFull() model {
@@ -538,7 +571,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.previewPending = ""
-		return m, (&m).schedulePreviewOpts(true)
+		return m, (&m).schedulePreviewOpts(previewScheduleImmediate)
+
+	case registryReloadMsg:
+		m.registryReloadPending = false
+		oldRev := ""
+		if session, ok := m.selected(); ok {
+			oldRev = previewRevision(session)
+		}
+		prevKey := m.sessionsRenderKey
+		m = m.reload()
+		if info, err := os.Stat(m.registry); err == nil {
+			m.registryMtime = info.ModTime()
+		}
+		if m.quitting {
+			return m, tea.Quit
+		}
+		changed := m.sessionsRenderKey != prevKey
+		cmd := scheduleRegistryRefresh()
+		if changed {
+			if session, ok := m.selected(); ok && previewRevision(session) != oldRev {
+				cmd = tea.Batch(cmd, m.schedulePreview())
+			}
+		}
+		return m, cmd
 
 	case previewLiveTickMsg:
 		cmd := schedulePreviewLiveRefresh()
@@ -592,20 +648,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.schedulePreview()
 
 	case tickMsg:
-		oldRev := ""
-		if session, ok := m.selected(); ok {
-			oldRev = previewRevision(session)
-		}
-		var changed bool
-		m, changed = m.reloadIfChanged()
-		if m.quitting {
-			return m, tea.Quit
+		var pendingReload tea.Cmd
+		if m.registryFileChanged() && !m.registryReloadPending {
+			m.registryReloadPending = true
+			pendingReload = tea.Tick(registryReloadDebounce, func(time.Time) tea.Msg {
+				return registryReloadMsg{}
+			})
 		}
 		cmd := scheduleRegistryRefresh()
-		if changed {
-			if session, ok := m.selected(); ok && previewRevision(session) != oldRev {
-				cmd = tea.Batch(cmd, m.schedulePreview())
-			}
+		if pendingReload != nil {
+			cmd = tea.Batch(cmd, pendingReload)
 		}
 		return m, cmd
 
@@ -664,10 +716,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "up", "ctrl+p", "ctrl+k", "shift+tab":
 			m = m.setCursor(m.cursor + 1)
-			return m, m.schedulePreview()
+			return m, m.schedulePreviewNavigate()
 		case "down", "ctrl+n", "ctrl+j", "tab":
 			m = m.setCursor(m.cursor - 1)
-			return m, m.schedulePreview()
+			return m, m.schedulePreviewNavigate()
 		case "enter":
 			if m.loading {
 				return m, nil
@@ -803,6 +855,7 @@ func (m model) contentWidth() int {
 }
 
 func (m model) View() tea.View {
+	defer profileStart("View")()
 	if m.quitting && m.attach {
 		return tea.NewView("")
 	}

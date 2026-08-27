@@ -16,6 +16,7 @@ type PaneInfo struct {
 	CurrentCommand string
 	StartCommand   string
 	CurrentPath    string
+	ShellPID       int
 	Exists         bool
 	HasPiAgent     bool
 }

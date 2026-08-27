@@ -2,6 +2,7 @@ package tmux
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +14,7 @@ const (
 	// set of ttys to scan is unchanged. ps has a fixed ~20ms startup cost on
 	// macOS, so this cache avoids re-paying it on every snapshot refresh.
 	piScanTTL      = 15 * time.Second
-	paneListFormat = "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}"
+	paneListFormat = "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}\t#{pane_pid}"
 )
 
 // Snapshot is a cached tmux list-panes result used to avoid per-pane subprocess storms.
@@ -60,6 +61,7 @@ func refreshSnapshot() (*Snapshot, error) {
 
 	panes := make(map[string]PaneInfo)
 	scanTTYs := make(map[string]struct{})
+	checkPIDs := make([]int, 0)
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -82,10 +84,18 @@ func refreshSnapshot() (*Snapshot, error) {
 			CurrentPath:    fields[7],
 			Exists:         true,
 		}
+		if len(fields) >= 9 {
+			if pid, err := strconv.Atoi(strings.TrimSpace(fields[8])); err == nil {
+				info.ShellPID = pid
+			}
+		}
 		info.HasPiAgent = isPiCommand(info.CurrentCommand, info.StartCommand)
 		if !info.HasPiAgent {
 			if tty := ttyBaseName(info.TTY); tty != "" {
 				scanTTYs[tty] = struct{}{}
+			}
+			if info.ShellPID > 0 {
+				checkPIDs = append(checkPIDs, info.ShellPID)
 			}
 		}
 		panes[target] = info
@@ -95,10 +105,14 @@ func refreshSnapshot() (*Snapshot, error) {
 	// already prove pi, instead of a full-system `ps -e` scan. The result is
 	// cached by tty set (see cachedPiAgentTTYs).
 	piTTYs := cachedPiAgentTTYs(scanTTYs)
+	piRoots := piAgentsInProcessTrees(checkPIDs, defaultProcessTreeDepth)
 
 	for target, info := range panes {
 		if !info.HasPiAgent {
 			info.HasPiAgent = piTTYs[ttyBaseName(info.TTY)]
+		}
+		if !info.HasPiAgent && info.ShellPID > 0 && piRoots[info.ShellPID] {
+			info.HasPiAgent = true
 		}
 		panes[target] = info
 	}

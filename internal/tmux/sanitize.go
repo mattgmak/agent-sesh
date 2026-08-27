@@ -36,8 +36,9 @@ func hasAgentChecker(snap *Snapshot) func(string, string) bool {
 			if target == "" {
 				return false
 			}
-			if snap != nil && snap.HasPiAgent(target) {
-				return true
+			if snap != nil {
+				info, ok := snap.PaneInfo(target)
+				return ok && info.HasPiAgent
 			}
 			return PaneHasPiAgent(target)
 		default:

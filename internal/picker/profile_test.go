@@ -41,6 +41,34 @@ func TestProfileWritesToFileNotStderr(t *testing.T) {
 	}
 }
 
+func TestViewIsProfiledWhenEnabled(t *testing.T) {
+	logPath := t.TempDir() + "/profile.log"
+	t.Setenv("AGENT_SESH_PROFILE", logPath)
+
+	path, err := initProfile()
+	if err != nil {
+		t.Fatalf("initProfile: %v", err)
+	}
+	if path != logPath {
+		t.Fatalf("initProfile path = %q, want %q", path, logPath)
+	}
+
+	m := testModel(sampleSessions())
+	m.width = 120
+	m.height = 24
+	m.syncInputWidth()
+	_ = viewContent(m)
+	closeProfile()
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read profile log: %v", err)
+	}
+	if !strings.Contains(string(data), "View") {
+		t.Fatalf("expected View in profile log, got:\n%s", string(data))
+	}
+}
+
 func TestProfileDisabledByDefault(t *testing.T) {
 	t.Setenv("AGENT_SESH_PROFILE", "")
 	path, err := initProfile()
