@@ -1,7 +1,7 @@
 // Package prof provides opt-in wall-clock timing and CPU profiling for
 // agent-sesh, enabled via environment variables:
 //
-//	AGENT_SESH_PROFILE=1|/path/to/profile.log   timed op log + summary
+//	AGENT_SESH_PROFILE=1|/path/to/profile.log   timed op log + summary (appends across runs)
 //	AGENT_SESH_CPUPROFILE=1|/path/to/cpu.prof    pprof CPU profile
 //
 // Both default to $XDG_STATE_HOME/agent-sesh (or ~/.local/state/agent-sesh)
@@ -58,7 +58,7 @@ func Init() (string, error) {
 		return "", err
 	}
 
-	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return "", err
 	}
@@ -84,6 +84,7 @@ func Close() string {
 	}
 
 	writeSummaryLocked()
+	_, _ = fmt.Fprintf(file, "agent-sesh profile ended %s pid=%d\n", time.Now().Format(time.RFC3339), os.Getpid())
 	p := path
 	_ = file.Close()
 	file = nil
