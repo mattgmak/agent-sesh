@@ -65,20 +65,18 @@ func gutterStyleFor(status registry.Status, selected bool) lipgloss.Style {
 	return s.Faint(true)
 }
 
+var statusLabelStyles = map[registry.Status]lipgloss.Style{
+	registry.StatusWorking:       lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(2)).Bold(true),
+	registry.StatusToolCall:      lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(2)).Bold(true),
+	registry.StatusHalted:        lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(1)).Bold(true),
+	registry.StatusAwaitingInput: lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.Color("220")).Bold(true),
+	registry.StatusUnknown:       lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(6)).Bold(true),
+	registry.StatusIdle:          lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(8)),
+}
+
 func statusLabelStyle(status registry.Status) lipgloss.Style {
-	base := lipgloss.NewStyle().UnsetBackground()
-	switch status {
-	case registry.StatusWorking:
-		return base.Foreground(lipgloss.ANSIColor(2)).Bold(true)
-	case registry.StatusToolCall:
-		return base.Foreground(lipgloss.ANSIColor(2)).Bold(true)
-	case registry.StatusHalted:
-		return base.Foreground(lipgloss.ANSIColor(1)).Bold(true)
-	case registry.StatusAwaitingInput:
-		return base.Foreground(lipgloss.Color("220")).Bold(true)
-	case registry.StatusUnknown:
-		return base.Foreground(lipgloss.ANSIColor(6)).Bold(true)
-	default:
-		return base.Foreground(lipgloss.ANSIColor(8))
+	if style, ok := statusLabelStyles[status]; ok {
+		return style
 	}
+	return statusLabelStyles[registry.StatusIdle]
 }

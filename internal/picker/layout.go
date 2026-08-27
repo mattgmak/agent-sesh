@@ -122,6 +122,19 @@ func listWindow(cursor, offset, itemCount, visible int) (newOffset, end int) {
 	return offset, end
 }
 
+// renderItemRange picks a subset of items to format. Row scrolling still
+// happens later; this bounds lipgloss work to roughly the visible row budget.
+func renderItemRange(itemCount, cursor, visibleRows int) (lo, hi int) {
+	if itemCount == 0 {
+		return 0, 0
+	}
+	if itemCount <= visibleRows+4 {
+		return 0, itemCount
+	}
+	lo, hi = listWindow(cursor, 0, itemCount, visibleRows+2)
+	return lo, hi
+}
+
 type listRenderOpts struct {
 	showCursor bool
 	emptyText  string
@@ -160,13 +173,17 @@ func renderListFrame(
 		lines     []string
 	}
 
-	blocks := make([]entryBlock, len(items))
-	allRows := make([]string, 0, len(items)*3)
-	rowStarts := make([]int, len(items))
+	renderLo, renderHi := renderItemRange(len(items), cursor, visible)
+	renderItems := items[renderLo:renderHi]
+	localCursor := cursor - renderLo
 
-	for i := len(items) - 1; i >= 0; i-- {
-		item := items[i]
-		selected := opts.showCursor && i == cursor
+	blocks := make([]entryBlock, len(renderItems))
+	allRows := make([]string, 0, len(renderItems)*3)
+	rowStarts := make([]int, len(renderItems))
+
+	for i := len(renderItems) - 1; i >= 0; i-- {
+		item := renderItems[i]
+		selected := opts.showCursor && i == localCursor
 
 		gutterWidth := lipgloss.Width(renderListGutter(selected, item.Status))
 		gapWidth := lipgloss.Width(listEntryGap)
@@ -182,7 +199,7 @@ func renderListFrame(
 			styled = append(styled, line)
 		}
 		rowStarts[i] = len(allRows)
-		blocks[i] = entryBlock{itemIndex: i, lines: styled}
+		blocks[i] = entryBlock{itemIndex: renderLo + i, lines: styled}
 		allRows = append(allRows, styled...)
 		if i > 0 {
 			allRows = append(allRows, "")
@@ -193,8 +210,8 @@ func renderListFrame(
 		return strings.Repeat("\n", visible-1)
 	}
 
-	cursorStart := rowStarts[cursor]
-	cursorEnd := cursorStart + len(blocks[cursor].lines)
+	cursorStart := rowStarts[localCursor]
+	cursorEnd := cursorStart + len(blocks[localCursor].lines)
 
 	start := len(allRows) - visible
 	if start < 0 {

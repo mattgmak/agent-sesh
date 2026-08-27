@@ -17,9 +17,11 @@ func loadSessionsFast(path string) ([]registry.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	sanitized, _ := registry.Sanitize(sessions, tmux.RegistrySanitizeOptions(nil))
-	registry.SortSessions(sanitized)
-	return sanitized, nil
+	// Skip tmux sanitize here — Init() runs loadSessionsFull immediately with
+	// one shared snapshot. Sanitizing with a nil snapshot forces a cold pane
+	// scan that loadSessionsFull would repeat.
+	registry.SortSessions(sessions)
+	return sessions, nil
 }
 
 func loadSessionsFromSnapshot(path string, snap *tmux.Snapshot, discover bool) ([]registry.Session, error) {
@@ -41,8 +43,7 @@ func loadSessionsFromSnapshot(path string, snap *tmux.Snapshot, discover bool) (
 
 func loadSessionsFull(path string) ([]registry.Session, error) {
 	defer profileStart("loadSessionsFull")()
-	tmux.InvalidateSnapshot()
-	snap, err := tmux.GetSnapshot(true)
+	snap, err := tmux.GetSnapshot(false)
 	if err != nil {
 		return nil, err
 	}

@@ -112,6 +112,23 @@ func TestListWindowEmpty(t *testing.T) {
 	}
 }
 
+func TestRenderItemRangeSmallList(t *testing.T) {
+	lo, hi := renderItemRange(5, 2, 3)
+	if lo != 0 || hi != 5 {
+		t.Fatalf("renderItemRange(5,2,3) = %d,%d, want 0,5", lo, hi)
+	}
+}
+
+func TestRenderItemRangeLargeList(t *testing.T) {
+	lo, hi := renderItemRange(50, 25, 20)
+	if lo > 25 || hi <= 25 {
+		t.Fatalf("renderItemRange(50,25,20) = %d,%d, cursor 25 should be inside [%d,%d)", lo, hi, lo, hi)
+	}
+	if hi-lo > 24 {
+		t.Fatalf("renderItemRange(50,25,20) span=%d, want <=24", hi-lo)
+	}
+}
+
 func TestTruncateANSILine(t *testing.T) {
 	got := truncateLine("hello world", 5)
 	if lipgloss.Width(got) > 5 {

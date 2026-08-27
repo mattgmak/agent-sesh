@@ -444,7 +444,8 @@ func (m model) reload() model {
 		m.statusLine = err.Error()
 		return m
 	}
-	sanitized, _ := registry.Sanitize(fresh, tmux.RegistrySanitizeOptions(nil))
+	snap, _ := tmux.GetSnapshot(false)
+	sanitized, _ := registry.Sanitize(fresh, tmux.RegistrySanitizeOptions(snap))
 	next := refreshSessionsFromRegistry(m.sessions, sanitized)
 	if !m.applySessionsIfChanged(next) {
 		return m
