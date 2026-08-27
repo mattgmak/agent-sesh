@@ -81,6 +81,27 @@ function sessionUpdatedAfter(
 	return a.id > b.id;
 }
 
+const activeStatuses: ReadonlySet<AgentSeshStatus> = new Set([
+	"working",
+	"tool_call",
+	"awaiting_input",
+	"unknown",
+]);
+
+/** Reconcile registry status when pi reloads the extension. */
+export function reconcileStatusOnReload(
+	isIdle: boolean,
+	currentStatus?: AgentSeshStatus,
+): Partial<Pick<AgentSeshSession, "status" | "tool_name">> {
+	if (!isIdle) {
+		return {};
+	}
+	if (!currentStatus || !activeStatuses.has(currentStatus)) {
+		return {};
+	}
+	return { status: "halted", tool_name: null };
+}
+
 function mergeSessions(
 	...lists: AgentSeshSession[][]
 ): AgentSeshSession[] {
@@ -430,13 +451,21 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			lastTitle = sessionTitle(pi, ctx);
+			const target = await tmuxTarget();
+			const file = await readRegistry();
+			const idx = findSessionIndex(file.sessions, sessionId, target);
+			const currentStatus =
+				idx >= 0 ? file.sessions[idx].status : undefined;
+			const statusPatch =
+				event.reason === "reload"
+					? reconcileStatusOnReload(ctx.isIdle(), currentStatus)
+					: { status: "idle" as const };
 			await upsertSession({
 				id: sessionId,
 				cwd: ctx.sessionManager.getCwd(),
 				title: lastTitle,
 				model: modelLabel(ctx),
-				// Extension reloads must not clobber live working/tool_call status.
-				...(event.reason === "reload" ? {} : { status: "idle" }),
+				...statusPatch,
 			});
 		},
 	);
