@@ -493,13 +493,19 @@ func (m model) fetchPreview(seq int, id, target, revision string) tea.Cmd {
 }
 
 func (m model) reload() model {
+	return m.reloadWithSanitize(sanitizeSessionsForDisplay)
+}
+
+func (m model) reloadWithSanitize(sanitize func([]registry.Session) []registry.Session) model {
 	defer profileStart("reload")()
 	fresh, err := registry.Load(m.registry)
 	if err != nil {
 		m.statusLine = err.Error()
 		return m
 	}
-	next := refreshSessionsFromRegistry(m.sessions, fresh)
+	// Registry on disk can still list panes where pi exited; sanitize before
+	// merge so periodic reloads do not resurrect pruned rows.
+	next := refreshSessionsFromRegistry(m.sessions, sanitize(fresh))
 	if !m.applySessionsIfChanged(next) {
 		profileNote("reload", "noop")
 		return m

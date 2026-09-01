@@ -92,23 +92,8 @@ func sessionUpdatedAfter(a, b Session, now time.Time) bool {
 
 // ShouldPersistSanitize reports whether sanitize results should be written to disk.
 func ShouldPersistSanitize(before, after []Session, pruned []PruneReason) bool {
-	if len(after) != len(before) {
-		for _, reason := range pruned {
-			if pruneShouldPersist(reason.Reason) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func pruneShouldPersist(reason string) bool {
-	switch reason {
-	case "agent not running in pane":
-		return false
-	default:
-		return true
-	}
+	_ = pruned
+	return len(after) != len(before)
 }
 
 func parseUpdatedAt(value string, fallback time.Time) (time.Time, bool) {

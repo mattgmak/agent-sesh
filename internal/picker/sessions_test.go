@@ -24,3 +24,18 @@ func TestRefreshSessionsFromRegistrySorts(t *testing.T) {
 		t.Fatalf("refreshSessionsFromRegistry() = %+v, want waiting before working", got)
 	}
 }
+
+func TestRefreshSessionsFromRegistryDoesNotReaddPrunedRows(t *testing.T) {
+	current := []registry.Session{
+		{ID: "live", TmuxTarget: "%2", Status: registry.StatusWorking},
+	}
+	// Caller must pass sanitized registry rows; ghosts are already removed.
+	fresh := []registry.Session{
+		{ID: "live", TmuxTarget: "%2", Status: registry.StatusWorking},
+	}
+
+	got := refreshSessionsFromRegistry(current, fresh)
+	if len(got) != 1 || got[0].ID != "live" {
+		t.Fatalf("refreshSessionsFromRegistry() = %+v, want only live session", got)
+	}
+}

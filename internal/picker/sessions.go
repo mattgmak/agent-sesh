@@ -11,6 +11,15 @@ func sanitizeOptsFromSnapshot(snap *tmux.Snapshot) registry.SanitizeOptions {
 	return tmux.RegistrySanitizeOptions(snap)
 }
 
+func sanitizeSessionsForDisplay(sessions []registry.Session) []registry.Session {
+	snap, err := tmux.GetSnapshot(false)
+	if err != nil {
+		return sessions
+	}
+	sanitized, _ := registry.Sanitize(sessions, sanitizeOptsFromSnapshot(snap))
+	return sanitized
+}
+
 func loadSessionsFast(path string) ([]registry.Session, error) {
 	defer profileStart("loadSessionsFast")()
 	sessions, err := registry.Load(path)
@@ -170,6 +179,17 @@ func mergeRegistryFields(dst, src registry.Session) registry.Session {
 	return dst
 }
 
+func paneHasLivePiAgent(target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	if snap, err := tmux.GetSnapshot(false); err == nil {
+		return snap.HasPiAgent(target)
+	}
+	return tmux.PaneHasPiAgent(target)
+}
+
 // refreshSessionsFromRegistry updates live status fields without re-scanning tmux.
 func refreshSessionsFromRegistry(current, fresh []registry.Session) []registry.Session {
 	defer profileStart("refreshSessionsFromRegistry")()
@@ -196,7 +216,7 @@ func refreshSessionsFromRegistry(current, fresh []registry.Session) []registry.S
 			seen[target] = struct{}{}
 			continue
 		}
-		if strings.HasPrefix(session.ID, discoveredPrefix) {
+		if isDiscovered(session) && paneHasLivePiAgent(target) {
 			out = append(out, session)
 		}
 	}

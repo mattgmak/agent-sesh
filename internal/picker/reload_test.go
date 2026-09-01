@@ -36,7 +36,9 @@ func TestReloadMergesRegistryFields(t *testing.T) {
 		t.Fatalf("save fresh: %v", err)
 	}
 
-	m = m.reload()
+	m = m.reloadWithSanitize(func(sessions []registry.Session) []registry.Session {
+		return sessions
+	})
 	if m.sessions[0].Status != registry.StatusWorking || m.sessions[0].ToolName != "Shell" {
 		t.Fatalf("reload merge = %+v", m.sessions[0])
 	}
@@ -54,10 +56,14 @@ func TestReloadNoopWhenRenderKeyUnchanged(t *testing.T) {
 	m := testModel(sessions)
 	m.registry = path
 	m.syncSessionsRenderKey()
-	m = m.reload()
+	m = m.reloadWithSanitize(func(sessions []registry.Session) []registry.Session {
+		return sessions
+	})
 	before := m.sessionsRenderKey
 
-	m = m.reload()
+	m = m.reloadWithSanitize(func(sessions []registry.Session) []registry.Session {
+		return sessions
+	})
 	if m.sessionsRenderKey != before {
 		t.Fatalf("render key changed on noop reload")
 	}
