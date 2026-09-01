@@ -5,7 +5,8 @@
   "keywords": ["pi-package"],
   "description": "Registers pi sessions with agent-sesh for tmux picker integration",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test index.test.ts"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.81.0 <0.85.0"

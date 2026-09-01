@@ -102,6 +102,17 @@ export function reconcileStatusOnReload(
 	return { status: "halted", tool_name: null };
 }
 
+/** Skip stale active-status writes after agent_settled left the pane halted. */
+export function shouldApplyStatusTransition(
+	currentStatus: AgentSeshStatus,
+	nextStatus: AgentSeshStatus,
+): boolean {
+	if (currentStatus !== "halted") {
+		return true;
+	}
+	return nextStatus === "halted" || nextStatus === "idle";
+}
+
 function mergeSessions(
 	...lists: AgentSeshSession[][]
 ): AgentSeshSession[] {
@@ -386,7 +397,6 @@ export async function setStatus(
 	id: string,
 	status: AgentSeshStatus,
 	toolName?: string | null,
-	opts?: { skipWorkingIfHalted?: boolean },
 ): Promise<void> {
 	const target = await tmuxTarget();
 	const file = await readRegistry();
@@ -412,11 +422,7 @@ export async function setStatus(
 			return current.sessions;
 		}
 		const session = { ...current.sessions[currentIdx] };
-		if (
-			opts?.skipWorkingIfHalted &&
-			session.status === "halted" &&
-			status === "working"
-		) {
+		if (!shouldApplyStatusTransition(session.status, status)) {
 			return current.sessions;
 		}
 		session.status = status;
@@ -502,7 +508,7 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 			if (ctx.isIdle()) {
 				return;
 			}
-			await setStatus(id, "working", undefined, { skipWorkingIfHalted: true });
+			await setStatus(id, "working");
 		},
 	);
 
@@ -511,6 +517,10 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 		async (event: ToolExecutionStartEvent, ctx: ExtensionContext) => {
 			const id = requireSessionId(ctx);
 			if (!id) {
+				return;
+			}
+			// Late tool_execution_start can finish after agent_settled.
+			if (ctx.isIdle()) {
 				return;
 			}
 			if (event.toolName === "ask_user_question") {
@@ -529,6 +539,10 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 		async (_event: AgentStartEvent, ctx: ExtensionContext) => {
 			const id = requireSessionId(ctx);
 			if (!id) {
+				return;
+			}
+			// agent_start handlers can finish after agent_settled; do not revive working.
+			if (ctx.isIdle()) {
 				return;
 			}
 			await setStatus(id, "working");
