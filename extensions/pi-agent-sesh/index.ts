@@ -4,6 +4,7 @@ import type {
 	BeforeAgentStartEvent,
 	ExtensionAPI,
 	ExtensionContext,
+	MessageStartEvent,
 	SessionShutdownEvent,
 	SessionStartEvent,
 	ToolExecutionEndEvent,
@@ -111,6 +112,42 @@ export function shouldApplyStatusTransition(
 		return true;
 	}
 	return nextStatus === "halted" || nextStatus === "idle";
+}
+
+/** Text from a user message once it enters the agent loop. */
+export function extractUserPromptText(message: {
+	role: string;
+	content?: unknown;
+}): string | undefined {
+	if (message.role !== "user") {
+		return undefined;
+	}
+	const { content } = message;
+	if (typeof content === "string") {
+		const trimmed = content.trim();
+		return trimmed || undefined;
+	}
+	if (!Array.isArray(content)) {
+		return undefined;
+	}
+	const parts: string[] = [];
+	for (const part of content) {
+		if (
+			part &&
+			typeof part === "object" &&
+			"type" in part &&
+			part.type === "text" &&
+			"text" in part &&
+			typeof part.text === "string"
+		) {
+			const text = part.text.trim();
+			if (text) {
+				parts.push(text);
+			}
+		}
+	}
+	const combined = parts.join("\n").trim();
+	return combined || undefined;
 }
 
 function mergeSessions(
@@ -483,15 +520,31 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 			if (!id) {
 				return;
 			}
-			const prompt = event.prompt?.trim();
 			lastTitle = sessionTitle(pi, ctx, event.prompt);
 			await upsertSession({
 				id,
 				cwd: ctx.sessionManager.getCwd(),
 				title: lastTitle,
-				last_prompt: prompt || undefined,
 				model: modelLabel(ctx),
 				status: "working",
+			});
+		},
+	);
+
+	pi.on(
+		"message_start",
+		async (event: MessageStartEvent, ctx: ExtensionContext) => {
+			const id = requireSessionId(ctx);
+			const prompt = extractUserPromptText(event.message);
+			if (!id || !prompt) {
+				return;
+			}
+			await upsertSession({
+				id,
+				cwd: ctx.sessionManager.getCwd(),
+				title: lastTitle,
+				last_prompt: prompt,
+				model: modelLabel(ctx),
 			});
 		},
 	);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	extractUserPromptText,
 	reconcileStatusOnReload,
 	shouldApplyStatusTransition,
 } from "./index.ts";
@@ -40,4 +41,41 @@ test("shouldApplyStatusTransition allows normal in-run updates", () => {
 	assert.equal(shouldApplyStatusTransition("working", "tool_call"), true);
 	assert.equal(shouldApplyStatusTransition("tool_call", "working"), true);
 	assert.equal(shouldApplyStatusTransition("idle", "working"), true);
+});
+
+test("extractUserPromptText reads string and multipart user messages", () => {
+	assert.equal(
+		extractUserPromptText({
+			role: "user",
+			content: "  fix tests  ",
+		}),
+		"fix tests",
+	);
+	assert.equal(
+		extractUserPromptText({
+			role: "user",
+			content: [
+				{ type: "text", text: "line one" },
+				{ type: "text", text: "line two" },
+			],
+		}),
+		"line one\nline two",
+	);
+});
+
+test("extractUserPromptText ignores non-user and empty messages", () => {
+	assert.equal(
+		extractUserPromptText({
+			role: "assistant",
+			content: [{ type: "text", text: "hello" }],
+		}),
+		undefined,
+	);
+	assert.equal(
+		extractUserPromptText({
+			role: "user",
+			content: "   ",
+		}),
+		undefined,
+	);
 });
