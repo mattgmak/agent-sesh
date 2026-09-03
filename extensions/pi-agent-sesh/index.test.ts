@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	extractUserPromptText,
+	haltedBlocksResume,
 	reconcileStatusOnReload,
 	resolveUpsertStatus,
 	shouldApplyStatusTransition,
+	type AgentSeshSession,
 } from "./index.ts";
 
 test("reconcileStatusOnReload downgrades active statuses when idle", () => {
@@ -27,13 +29,41 @@ test("reconcileStatusOnReload skips when agent is busy", () => {
 	assert.deepEqual(reconcileStatusOnReload(false, "working"), {});
 });
 
+test("shouldApplyStatusTransition blocks working over halted by default", () => {
+	assert.equal(shouldApplyStatusTransition("halted", "working"), false);
+});
+
+test("shouldApplyStatusTransition allows working over halted with resumeFromHalt", () => {
+	assert.equal(
+		shouldApplyStatusTransition("halted", "working", { resumeFromHalt: true }),
+		true,
+	);
+});
+
 test("shouldApplyStatusTransition blocks stale tool states over halted", () => {
 	assert.equal(shouldApplyStatusTransition("halted", "tool_call"), false);
 	assert.equal(shouldApplyStatusTransition("halted", "awaiting_input"), false);
 });
 
-test("shouldApplyStatusTransition allows working after halted for agent_start", () => {
-	assert.equal(shouldApplyStatusTransition("halted", "working"), true);
+test("resolveUpsertStatus blocks working over halted by default", () => {
+	assert.equal(
+		resolveUpsertStatus(
+			{ status: "halted" } as Parameters<typeof resolveUpsertStatus>[0],
+			"working",
+		),
+		"halted",
+	);
+});
+
+test("resolveUpsertStatus allows working over halted with resumeFromHalt", () => {
+	assert.equal(
+		resolveUpsertStatus(
+			{ status: "halted" } as Parameters<typeof resolveUpsertStatus>[0],
+			"working",
+			{ resumeFromHalt: true },
+		),
+		"working",
+	);
 });
 
 test("resolveUpsertStatus always applies halted", () => {
@@ -56,19 +86,37 @@ test("resolveUpsertStatus blocks active writes over halted", () => {
 	);
 });
 
-test("resolveUpsertStatus allows working when agent restarts", () => {
-	assert.equal(
-		resolveUpsertStatus(
-			{ status: "halted" } as Parameters<typeof resolveUpsertStatus>[0],
-			"working",
-		),
-		"working",
-	);
-});
-
 test("shouldApplyStatusTransition allows halted to clear or acknowledge", () => {
 	assert.equal(shouldApplyStatusTransition("halted", "halted"), true);
 	assert.equal(shouldApplyStatusTransition("halted", "idle"), true);
+});
+
+test("haltedBlocksResume rejects stale agent_start after newer halt", () => {
+	const session = {
+		status: "halted",
+		updated_at: "2026-09-03T09:20:00.000Z",
+	} as AgentSeshSession;
+	assert.equal(
+		haltedBlocksResume(session, "working", {
+			resumeFromHalt: true,
+			resumeIfHaltedBefore: Date.parse("2026-09-03T09:19:00.000Z"),
+		}),
+		true,
+	);
+});
+
+test("haltedBlocksResume allows resume when halt predates agent_start", () => {
+	const session = {
+		status: "halted",
+		updated_at: "2026-09-03T09:19:00.000Z",
+	} as AgentSeshSession;
+	assert.equal(
+		haltedBlocksResume(session, "working", {
+			resumeFromHalt: true,
+			resumeIfHaltedBefore: Date.parse("2026-09-03T09:20:00.000Z"),
+		}),
+		false,
+	);
 });
 
 test("shouldApplyStatusTransition allows normal in-run updates", () => {

@@ -103,17 +103,24 @@ export function reconcileStatusOnReload(
 	return { status: "halted", tool_name: null };
 }
 
+export interface StatusTransitionOptions {
+	/** Allow halted → working when a new agent run is starting. */
+	resumeFromHalt?: boolean;
+	/** Only resume when the halt predates this epoch ms (agent_start time). */
+	resumeIfHaltedBefore?: number;
+}
+
 /** Skip stale active-status writes after agent_settled left the pane halted. */
 export function shouldApplyStatusTransition(
 	currentStatus: AgentSeshStatus,
 	nextStatus: AgentSeshStatus,
+	opts?: StatusTransitionOptions,
 ): boolean {
 	if (currentStatus !== "halted") {
 		return true;
 	}
-	// working is allowed here; agent_start/tool handlers gate stale writes with isIdle().
 	if (nextStatus === "working") {
-		return true;
+		return opts?.resumeFromHalt === true;
 	}
 	return nextStatus === "halted" || nextStatus === "idle";
 }
@@ -122,6 +129,7 @@ export function shouldApplyStatusTransition(
 export function resolveUpsertStatus(
 	existing: AgentSeshSession | undefined,
 	partialStatus: AgentSeshStatus | undefined,
+	opts?: StatusTransitionOptions,
 ): AgentSeshStatus {
 	const fallback = existing?.status ?? "idle";
 	if (partialStatus === undefined) {
@@ -132,7 +140,7 @@ export function resolveUpsertStatus(
 		return "halted";
 	}
 	const current = existing?.status ?? "idle";
-	if (!shouldApplyStatusTransition(current, partialStatus)) {
+	if (!shouldApplyStatusTransition(current, partialStatus, opts)) {
 		return current;
 	}
 	return partialStatus;
@@ -172,6 +180,27 @@ export function extractUserPromptText(message: {
 	}
 	const combined = parts.join("\n").trim();
 	return combined || undefined;
+}
+
+export function haltedBlocksResume(
+	session: AgentSeshSession,
+	status: AgentSeshStatus,
+	opts?: StatusTransitionOptions,
+): boolean {
+	if (session.status !== "halted" || status !== "working") {
+		return false;
+	}
+	if (!opts?.resumeFromHalt) {
+		return true;
+	}
+	if (opts.resumeIfHaltedBefore === undefined) {
+		return false;
+	}
+	const haltedAt = Date.parse(session.updated_at);
+	if (Number.isNaN(haltedAt)) {
+		return false;
+	}
+	return haltedAt >= opts.resumeIfHaltedBefore;
 }
 
 function mergeSessions(
@@ -354,6 +383,16 @@ function sessionTitle(
 	return basename(ctx.sessionManager.getCwd());
 }
 
+function normalizeToolName(
+	toolName: string | null | undefined,
+): string | undefined {
+	if (toolName === null || toolName === undefined) {
+		return undefined;
+	}
+	const trimmed = toolName.trim();
+	return trimmed || undefined;
+}
+
 function truncateToolName(toolName: string): string {
 	return toolName.length > 64 ? `${toolName.slice(0, 61)}...` : toolName;
 }
@@ -395,7 +434,7 @@ export async function upsertSession(partial: {
 			tool_name:
 				partial.tool_name === null
 					? undefined
-					: (partial.tool_name ?? existing?.tool_name),
+					: normalizeToolName(partial.tool_name ?? existing?.tool_name),
 			model: partial.model ?? existing?.model,
 			agent: "pi",
 			updated_at: now,
@@ -458,6 +497,7 @@ export async function setStatus(
 	id: string,
 	status: AgentSeshStatus,
 	toolName?: string | null,
+	opts?: StatusTransitionOptions,
 ): Promise<void> {
 	const target = await tmuxTarget();
 	const file = await readRegistry();
@@ -483,14 +523,22 @@ export async function setStatus(
 			return current.sessions;
 		}
 		const session = { ...current.sessions[currentIdx] };
-		if (!shouldApplyStatusTransition(session.status, status)) {
+		if (
+			haltedBlocksResume(session, status, opts) ||
+			!shouldApplyStatusTransition(session.status, status, opts)
+		) {
 			return current.sessions;
 		}
 		session.status = status;
 		if (toolName === null) {
 			delete session.tool_name;
 		} else if (toolName !== undefined) {
-			session.tool_name = toolName;
+			const normalized = normalizeToolName(toolName);
+			if (normalized) {
+				session.tool_name = normalized;
+			} else {
+				delete session.tool_name;
+			}
 		} else if (status !== "tool_call") {
 			delete session.tool_name;
 		}
@@ -621,7 +669,11 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 			if (ctx.isIdle()) {
 				return;
 			}
-			await setStatus(id, "working");
+			const startedAt = Date.now();
+			await setStatus(id, "working", undefined, {
+				resumeFromHalt: true,
+				resumeIfHaltedBefore: startedAt,
+			});
 		},
 	);
 
