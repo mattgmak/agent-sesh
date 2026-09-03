@@ -111,7 +111,31 @@ export function shouldApplyStatusTransition(
 	if (currentStatus !== "halted") {
 		return true;
 	}
+	// working is allowed here; agent_start/tool handlers gate stale writes with isIdle().
+	if (nextStatus === "working") {
+		return true;
+	}
 	return nextStatus === "halted" || nextStatus === "idle";
+}
+
+/** Resolve registry status for upsertSession, honoring halted guards. */
+export function resolveUpsertStatus(
+	existing: AgentSeshSession | undefined,
+	partialStatus: AgentSeshStatus | undefined,
+): AgentSeshStatus {
+	const fallback = existing?.status ?? "idle";
+	if (partialStatus === undefined) {
+		return fallback;
+	}
+	// agent_settled must always win over in-flight active-status writes.
+	if (partialStatus === "halted") {
+		return "halted";
+	}
+	const current = existing?.status ?? "idle";
+	if (!shouldApplyStatusTransition(current, partialStatus)) {
+		return current;
+	}
+	return partialStatus;
 }
 
 /** Text from a user message once it enters the agent loop. */
@@ -367,7 +391,7 @@ export async function upsertSession(partial: {
 			title: partial.title,
 			last_prompt: partial.last_prompt ?? existing?.last_prompt,
 			last_prompt_at: promptUpdated ? now : existing?.last_prompt_at,
-			status: partial.status ?? existing?.status ?? "idle",
+			status: resolveUpsertStatus(existing, partial.status),
 			tool_name:
 				partial.tool_name === null
 					? undefined
@@ -526,7 +550,6 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 				cwd: ctx.sessionManager.getCwd(),
 				title: lastTitle,
 				model: modelLabel(ctx),
-				status: "working",
 			});
 		},
 	);

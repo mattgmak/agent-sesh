@@ -3,6 +3,7 @@ import test from "node:test";
 import {
 	extractUserPromptText,
 	reconcileStatusOnReload,
+	resolveUpsertStatus,
 	shouldApplyStatusTransition,
 } from "./index.ts";
 
@@ -26,10 +27,43 @@ test("reconcileStatusOnReload skips when agent is busy", () => {
 	assert.deepEqual(reconcileStatusOnReload(false, "working"), {});
 });
 
-test("shouldApplyStatusTransition blocks stale writes over halted", () => {
-	assert.equal(shouldApplyStatusTransition("halted", "working"), false);
+test("shouldApplyStatusTransition blocks stale tool states over halted", () => {
 	assert.equal(shouldApplyStatusTransition("halted", "tool_call"), false);
 	assert.equal(shouldApplyStatusTransition("halted", "awaiting_input"), false);
+});
+
+test("shouldApplyStatusTransition allows working after halted for agent_start", () => {
+	assert.equal(shouldApplyStatusTransition("halted", "working"), true);
+});
+
+test("resolveUpsertStatus always applies halted", () => {
+	assert.equal(
+		resolveUpsertStatus(
+			{ status: "working" } as Parameters<typeof resolveUpsertStatus>[0],
+			"halted",
+		),
+		"halted",
+	);
+});
+
+test("resolveUpsertStatus blocks active writes over halted", () => {
+	assert.equal(
+		resolveUpsertStatus(
+			{ status: "halted" } as Parameters<typeof resolveUpsertStatus>[0],
+			"tool_call",
+		),
+		"halted",
+	);
+});
+
+test("resolveUpsertStatus allows working when agent restarts", () => {
+	assert.equal(
+		resolveUpsertStatus(
+			{ status: "halted" } as Parameters<typeof resolveUpsertStatus>[0],
+			"working",
+		),
+		"working",
+	);
 });
 
 test("shouldApplyStatusTransition allows halted to clear or acknowledge", () => {
