@@ -149,7 +149,7 @@ func Discover(w io.Writer) error {
 	var missing []tmux.PaneInfo
 	for _, paneID := range paneIDs {
 		info := tmux.PaneInfoFor(paneID)
-		if !info.HasPiAgent {
+		if !info.HasPiAgent || info.IsSubagent {
 			continue
 		}
 		if _, ok := known[paneID]; ok {
