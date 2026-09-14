@@ -38,9 +38,10 @@ func hasAgentChecker(snap *Snapshot) func(string, string) bool {
 			}
 			if snap != nil {
 				info, ok := snap.PaneInfo(target)
-				return ok && info.HasPiAgent
+				// Subagent surfaces run pi too; drop them from registry/counts.
+				return ok && info.HasPiAgent && !info.IsSubagent
 			}
-			return PaneHasPiAgent(target)
+			return PaneHasPiAgent(target) && !PaneIsSubagent(target)
 		default:
 			return false
 		}

@@ -19,6 +19,10 @@ type PaneInfo struct {
 	ShellPID       int
 	Exists         bool
 	HasPiAgent     bool
+	// IsSubagent: pane runs a pi-interactive-subagents launch script
+	// (bash <...>/subagent-scripts/<name>-<id>.sh). Runs pi too, but must not
+	// surface as a pi session.
+	IsSubagent bool
 }
 
 // PaneTTY returns the tty device for a tmux pane target.
@@ -73,6 +77,20 @@ func PaneHasPiAgent(target string) bool {
 		return false
 	}
 	return processTreeHasPi(pid, 5)
+}
+
+// PaneIsSubagent reports whether the pane is a pi-interactive-subagents surface.
+func PaneIsSubagent(target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	if snap, err := GetSnapshot(false); err == nil {
+		if info, ok := snap.PaneInfo(target); ok {
+			return info.IsSubagent
+		}
+	}
+	return PaneInfoFor(target).IsSubagent
 }
 
 func paneHasPiOnTTY(target string) bool {
@@ -220,7 +238,30 @@ func PaneInfoForOpts(target string, knownPi bool) PaneInfo {
 	} else {
 		info.HasPiAgent = detectPiAgent(info)
 	}
+	info.IsSubagent = isSubagentScriptLine(info.StartCommand) || isSubagentScriptLine(info.CurrentCommand)
+	if !info.IsSubagent {
+		info.IsSubagent = paneHasSubagentScriptOnTTY(info.Target)
+	}
 	return info
+}
+
+// paneHasSubagentScriptOnTTY: pi-interactive-subagents launch script with the
+// pane's tty as controlling terminal.
+func paneHasSubagentScriptOnTTY(target string) bool {
+	tty, err := PaneTTY(target)
+	if err != nil || tty == "" {
+		return false
+	}
+	out, err := execOutput("ps.pane-tty-subagent", "ps", "-t", tty, "-o", "command=")
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if isSubagentScriptLine(line) {
+			return true
+		}
+	}
+	return false
 }
 
 // ListPaneIDs returns all pane ids in the tmux server.

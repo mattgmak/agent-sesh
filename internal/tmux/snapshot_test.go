@@ -62,6 +62,8 @@ func TestPiPanesFilters(t *testing.T) {
 		panes: map[string]PaneInfo{
 			"%1": {Target: "%1", HasPiAgent: true},
 			"%2": {Target: "%2", HasPiAgent: false},
+			// Subagent surfaces run pi (HasPiAgent) but must be excluded.
+			"%3": {Target: "%3", HasPiAgent: true, IsSubagent: true},
 		},
 	}
 	got := snap.PiPanes()

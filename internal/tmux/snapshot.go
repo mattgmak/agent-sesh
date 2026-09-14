@@ -105,7 +105,7 @@ func refreshSnapshot() (*Snapshot, error) {
 	// already prove pi, instead of a full-system `ps -e` scan. The result is
 	// cached by tty set (see cachedPiAgentTTYs).
 	piTTYs := cachedPiAgentTTYs(scanTTYs)
-	piRoots := piAgentsInProcessTrees(checkPIDs, defaultProcessTreeDepth)
+	piRoots, subagentRoots := agentPresenceInProcessTrees(checkPIDs, defaultProcessTreeDepth)
 
 	for target, info := range panes {
 		if !info.HasPiAgent {
@@ -113,6 +113,9 @@ func refreshSnapshot() (*Snapshot, error) {
 		}
 		if !info.HasPiAgent && info.ShellPID > 0 && piRoots[info.ShellPID] {
 			info.HasPiAgent = true
+		}
+		if info.ShellPID > 0 && subagentRoots[info.ShellPID] {
+			info.IsSubagent = true
 		}
 		panes[target] = info
 	}
@@ -194,14 +197,15 @@ func (s *Snapshot) HasPiAgent(target string) bool {
 	return ok && info.HasPiAgent
 }
 
-// PiPanes returns panes with pi agents from the snapshot.
+// PiPanes returns panes with pi agents, excluding pi-interactive-subagents
+// surfaces (they run pi but must not surface as pi sessions).
 func (s *Snapshot) PiPanes() []PaneInfo {
 	if s == nil {
 		return nil
 	}
 	out := make([]PaneInfo, 0)
 	for _, info := range s.panes {
-		if info.HasPiAgent {
+		if info.HasPiAgent && !info.IsSubagent {
 			out = append(out, info)
 		}
 	}

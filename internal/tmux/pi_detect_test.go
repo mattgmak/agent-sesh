@@ -1,44 +1,67 @@
 package tmux
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
-func TestParsePSProcessList(t *testing.T) {
-	input := `  100   1 /bin/zsh -l
-  200 100 node /path/to/pi
-  300 100 lazygit
-`
-	got, err := parsePSProcessList(input)
-	if err != nil {
-		t.Fatalf("parsePSProcessList: %v", err)
+func TestIsSubagentScriptLine(t *testing.T) {
+	subagent := []string{
+		"bash /Users/x/.pi/agent/sessions/--Users-x-proj--/artifacts/abc123/subagent-scripts/worker-abc123.sh",
+		"bash /var/folders/ab/cdef/T/pi-subagent-scripts/cmd-1710000000-1a2b3c.sh",
 	}
-	if len(got) != 3 {
-		t.Fatalf("len = %d, want 3", len(got))
+	for _, line := range subagent {
+		if !isSubagentScriptLine(line) {
+			t.Fatalf("expected %q to match subagent launch script", line)
+		}
 	}
-	if got[1].pid != 200 || got[1].ppid != 100 || !strings.Contains(got[1].command, "pi") {
-		t.Fatalf("second process = %+v", got[1])
+
+	regular := []string{
+		"/usr/local/bin/pi --session /Users/x/.pi/sessions/proj/session.jsonl",
+		"bash",
+		"-zsh",
+		"lazygit",
+	}
+	for _, line := range regular {
+		if isSubagentScriptLine(line) {
+			t.Fatalf("unexpected match for %q", line)
+		}
 	}
 }
 
-func TestPiAgentsInProcessTreesFromParsedList(t *testing.T) {
-	processes := []psProcess{
-		{pid: 100, ppid: 1, command: "/bin/zsh"},
-		{pid: 200, ppid: 100, command: "/usr/local/bin/pi run"},
-		{pid: 300, ppid: 1, command: "/bin/bash"},
-	}
-	children := make(map[int][]int)
-	commands := make(map[int]string)
-	for _, proc := range processes {
-		children[proc.ppid] = append(children[proc.ppid], proc.pid)
-		commands[proc.pid] = proc.command
+func TestTreeHasCommand(t *testing.T) {
+	// 1 (bash script) -> 2 (pi) -> 3 (node)
+	children := map[int][]int{1: {2}, 2: {3}}
+	commands := map[int]string{
+		1: "bash /x/.pi/agent/sessions/--y--/artifacts/a/subagent-scripts/worker-a.sh",
+		2: "/usr/local/bin/pi --session /x/s.jsonl",
+		3: "node /nix/store/abc-pi/bin/pi",
 	}
 
-	if !treeHasPi(100, 5, children, commands) {
-		t.Fatal("expected pi under shell 100")
+	if !treeHasCommand(1, 5, children, commands, isPiProcessLine) {
+		t.Fatal("expected pi in subtree of root 1")
 	}
-	if treeHasPi(300, 5, children, commands) {
-		t.Fatal("expected no pi under shell 300")
+	if !treeHasCommand(1, 5, children, commands, isSubagentScriptLine) {
+		t.Fatal("expected subagent launch script in subtree of root 1")
+	}
+	if !treeHasCommand(3, 5, children, commands, isPiProcessLine) {
+		t.Fatal("expected pi at leaf 3")
+	}
+
+	misses := []struct {
+		pid      int
+		depth    int
+		commands map[int]string
+	}{
+		// Script 2 levels down is invisible at depth 1.
+		{1, 1, map[int]string{1: "bash", 2: "bash /x/subagent-scripts/y.sh"}},
+		{99, 5, map[int]string{99: "bash"}},
+		{3, 5, map[int]string{3: "nu"}},
+	}
+	for _, m := range misses {
+		if treeHasCommand(m.pid, m.depth, children, m.commands, isSubagentScriptLine) {
+			t.Fatalf("unexpected match for pid=%d depth=%d", m.pid, m.depth)
+		}
+	}
+	// Same tree at depth 2 does see the script.
+	if !treeHasCommand(1, 2, children, map[int]string{1: "bash", 2: "bash /x/subagent-scripts/y.sh"}, isSubagentScriptLine) {
+		t.Fatal("expected script visible at depth 2")
 	}
 }
