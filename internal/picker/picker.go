@@ -106,26 +106,26 @@ const (
 )
 
 type model struct {
-	sessions              []registry.Session
-	cursor                int
-	selectedID            string
-	selectedTarget        string
-	filter                textinput.Model
-	rename                textinput.Model
-	mode                  mode
-	width                 int
-	height                int
-	registry              string
-	statusLine            string
-	quitting              bool
-	attach                bool
-	previewContent        string
-	previewErr            error
-	previewPending        string
-	previewName           string
-	previewTarget         string
-	previewRevision       string
-	previewSeq            int
+	sessions                []registry.Session
+	cursor                  int
+	selectedID              string
+	selectedTarget          string
+	filter                  textinput.Model
+	rename                  textinput.Model
+	mode                    mode
+	width                   int
+	height                  int
+	registry                string
+	statusLine              string
+	quitting                bool
+	attach                  bool
+	previewContent          string
+	previewErr              error
+	previewPending          string
+	previewName             string
+	previewTarget           string
+	previewRevision         string
+	previewSeq              int
 	loading                 bool
 	registryMtime           time.Time
 	registryReloadPending   bool

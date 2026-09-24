@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultExecTimeout = 5 * time.Second
-	execWaitDelay       = time.Second
+	execWaitDelay      = time.Second
 )
 
 var execTimeout = defaultExecTimeout

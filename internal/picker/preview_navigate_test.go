@@ -103,10 +103,10 @@ func TestPreviewRefreshRevisionMismatchRefetches(t *testing.T) {
 	m.sessions[m.cursor].ToolName = "Shell"
 
 	updated, cmd := m.Update(previewRefreshMsg{
-		seq:      debounceSeq,
-		id:       session.ID,
-		target:   session.TmuxTarget,
-		rev:      debounceRevision,
+		seq:    debounceSeq,
+		id:     session.ID,
+		target: session.TmuxTarget,
+		rev:    debounceRevision,
 	})
 	got := updated.(model)
 	if cmd == nil {
