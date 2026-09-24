@@ -77,3 +77,45 @@ func TestSchedulePreviewNavigateExactCacheSkipsFetch(t *testing.T) {
 		t.Fatalf("preview = %q", m.previewContent)
 	}
 }
+
+func TestPreviewRefreshRevisionMismatchRefetches(t *testing.T) {
+	sessions := sampleSessions()
+	session := sessions[1]
+	invalidatePreviewCache(session.TmuxTarget)
+	t.Cleanup(func() { invalidatePreviewCache(session.TmuxTarget) })
+
+	m := testModel(sessions)
+	m.width = 120
+	m.height = 24
+	m.syncInputWidth()
+	m.cursor = 1
+	m.selectedID = session.ID
+	m.selectedTarget = session.TmuxTarget
+
+	setPreviewCache(session.TmuxTarget, "old-revision", "stale body", nil)
+	if cmd := (&m).schedulePreviewNavigate(); cmd == nil {
+		t.Fatal("expected deferred preview fetch")
+	}
+	debounceSeq := m.previewSeq
+	debounceRevision := m.previewRevision
+
+	m.sessions[m.cursor].Status = "working"
+	m.sessions[m.cursor].ToolName = "Shell"
+
+	updated, cmd := m.Update(previewRefreshMsg{
+		seq:      debounceSeq,
+		id:       session.ID,
+		target:   session.TmuxTarget,
+		rev:      debounceRevision,
+	})
+	got := updated.(model)
+	if cmd == nil {
+		t.Fatal("expected immediate fetch for current revision")
+	}
+	if got.previewPending != session.TmuxTarget {
+		t.Fatalf("previewPending = %q, want %q", got.previewPending, session.TmuxTarget)
+	}
+	if got.previewSeq <= debounceSeq {
+		t.Fatalf("previewSeq = %d, want greater than %d", got.previewSeq, debounceSeq)
+	}
+}

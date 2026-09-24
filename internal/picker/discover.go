@@ -66,21 +66,5 @@ func sessionPaneLabel(session registry.Session) string {
 func sessionPaneCoords(session registry.Session) (window, pane string, ok bool) {
 	window = strings.TrimSpace(session.TmuxWindow)
 	pane = strings.TrimSpace(session.TmuxPane)
-	if window != "" && pane != "" {
-		return window, pane, true
-	}
-	if snap, err := tmux.GetSnapshot(false); err == nil {
-		if info, hit := snap.PaneInfo(session.TmuxTarget); hit {
-			if window == "" {
-				window = info.WindowIndex
-			}
-			if pane == "" {
-				pane = info.PaneIndex
-			}
-			if window != "" && pane != "" {
-				return window, pane, true
-			}
-		}
-	}
-	return "", "", false
+	return window, pane, window != "" && pane != ""
 }

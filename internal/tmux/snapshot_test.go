@@ -73,11 +73,64 @@ func TestPiPanesFilters(t *testing.T) {
 }
 
 func TestCachedPiAgentTTYsEmpty(t *testing.T) {
-	if cachedPiAgentTTYs(nil) != nil {
-		t.Fatal("nil set should return nil without scanning")
+	got, err := cachedPiAgentTTYs(nil)
+	if err != nil || got != nil {
+		t.Fatalf("nil set = (%v, %v), want (nil, nil)", got, err)
 	}
-	if cachedPiAgentTTYs(map[string]struct{}{}) != nil {
-		t.Fatal("empty set should return nil without scanning")
+	got, err = cachedPiAgentTTYs(map[string]struct{}{})
+	if err != nil || got != nil {
+		t.Fatalf("empty set = (%v, %v), want (nil, nil)", got, err)
+	}
+}
+
+func TestRefreshSnapshotErrorPreservesCaches(t *testing.T) {
+	before := &Snapshot{
+		panes:     map[string]PaneInfo{"%old": {Target: "%old", Exists: true}},
+		fetchedAt: time.Now(),
+	}
+	snapshotMu.Lock()
+	oldSnapshot := snapshotCache
+	snapshotCache = before
+	snapshotMu.Unlock()
+	t.Cleanup(func() {
+		snapshotMu.Lock()
+		snapshotCache = oldSnapshot
+		snapshotMu.Unlock()
+	})
+
+	oldPiScanKey := "old-tty"
+	oldPiScanTTYs := map[string]bool{"old-tty": true}
+	oldPiScanAt := time.Now()
+	piScanMu.Lock()
+	oldPiKey, oldPiTTYs, oldPiAt := piScanKey, piScanTTYs, piScanAt
+	piScanKey, piScanTTYs, piScanAt = oldPiScanKey, oldPiScanTTYs, oldPiScanAt
+	piScanMu.Unlock()
+	t.Cleanup(func() {
+		piScanMu.Lock()
+		piScanKey, piScanTTYs, piScanAt = oldPiKey, oldPiTTYs, oldPiAt
+		piScanMu.Unlock()
+	})
+
+	binDir := t.TempDir()
+	writeFakeCommand(t, binDir, "tmux", `#!/bin/sh
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' '%1' 'work' '2' '3' '/dev/ttys999' 'zsh' 'zsh' '/tmp/project'
+`)
+	writeFakeCommand(t, binDir, "ps", "#!/bin/sh\nexit 1\n")
+	t.Setenv("PATH", binDir)
+
+	if _, err := refreshSnapshot(); err == nil {
+		t.Fatal("refreshSnapshot() succeeded despite ps failure")
+	}
+	snapshotMu.Lock()
+	cached := snapshotCache
+	snapshotMu.Unlock()
+	if cached != before {
+		t.Fatal("failed refresh replaced snapshot cache")
+	}
+	piScanMu.Lock()
+	defer piScanMu.Unlock()
+	if piScanKey != oldPiScanKey || !piScanTTYs["old-tty"] || !piScanAt.Equal(oldPiScanAt) {
+		t.Fatalf("failed refresh changed pi scan cache: key=%q ttys=%v at=%v", piScanKey, piScanTTYs, piScanAt)
 	}
 }
 
@@ -89,7 +142,10 @@ func TestCachedPiAgentTTYsReuse(t *testing.T) {
 	piScanAt = time.Now()
 	piScanMu.Unlock()
 
-	got := cachedPiAgentTTYs(map[string]struct{}{"ttys004": {}, "ttys005": {}})
+	got, err := cachedPiAgentTTYs(map[string]struct{}{"ttys004": {}, "ttys005": {}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !got["ttys004"] || got["ttys005"] {
 		t.Fatalf("expected cached result reuse, got %v", got)
 	}

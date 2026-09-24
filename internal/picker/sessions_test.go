@@ -16,7 +16,7 @@ func TestRefreshSessionsFromRegistrySorts(t *testing.T) {
 		{ID: "waiting", TmuxTarget: "%2", Status: registry.StatusHalted},
 	}
 
-	got := refreshSessionsFromRegistry(current, fresh)
+	got := refreshSessionsFromRegistry(current, fresh, nil)
 	if len(got) != 2 {
 		t.Fatalf("len = %d, want 2", len(got))
 	}
@@ -34,7 +34,7 @@ func TestRefreshSessionsFromRegistryDoesNotReaddPrunedRows(t *testing.T) {
 		{ID: "live", TmuxTarget: "%2", Status: registry.StatusWorking},
 	}
 
-	got := refreshSessionsFromRegistry(current, fresh)
+	got := refreshSessionsFromRegistry(current, fresh, nil)
 	if len(got) != 1 || got[0].ID != "live" {
 		t.Fatalf("refreshSessionsFromRegistry() = %+v, want only live session", got)
 	}

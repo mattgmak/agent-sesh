@@ -71,6 +71,14 @@ type previewRefreshMsg struct {
 type previewLiveTickMsg struct{}
 
 type discoveryLoadedMsg struct {
+	gen      int
+	sessions []registry.Session
+	err      error
+}
+
+type registryReloadedMsg struct {
+	gen      int
+	baseKey  string
 	sessions []registry.Session
 	err      error
 }
@@ -118,11 +126,15 @@ type model struct {
 	previewTarget         string
 	previewRevision       string
 	previewSeq            int
-	loading               bool
-	registryMtime         time.Time
-	registryReloadPending bool
-	sessionsRenderKey     string
-	previewLastFetch      time.Time
+	loading                 bool
+	registryMtime           time.Time
+	registryReloadPending   bool
+	registryReloadInFlight  bool
+	registryReloadGen       int
+	discoveryReloadInFlight bool
+	discoveryReloadGen      int
+	sessionsRenderKey       string
+	previewLastFetch        time.Time
 }
 
 func Run() error {
@@ -224,6 +236,20 @@ func (m model) loadSessionsAsync() tea.Cmd {
 	}
 }
 
+func (m model) reloadRegistryAsync(gen int, baseKey string) tea.Cmd {
+	path := m.registry
+	current := append([]registry.Session(nil), m.sessions...)
+	return func() tea.Msg {
+		sessions, err := reloadRegistry(path, current)
+		return registryReloadedMsg{
+			gen:      gen,
+			baseKey:  baseKey,
+			sessions: sessions,
+			err:      err,
+		}
+	}
+}
+
 func scheduleRegistryRefresh() tea.Cmd {
 	return tea.Tick(registryRefreshInterval, func(t time.Time) tea.Msg {
 		return tickMsg{}
@@ -236,12 +262,12 @@ func scheduleDiscoveryRefresh() tea.Cmd {
 	})
 }
 
-func (m model) reloadDiscoveryAsync() tea.Cmd {
+func (m model) reloadDiscoveryAsync(gen int) tea.Cmd {
 	path := m.registry
 	current := append([]registry.Session(nil), m.sessions...)
 	return func() tea.Msg {
 		sessions, err := reloadDiscovery(path, current)
-		return discoveryLoadedMsg{sessions: sessions, err: err}
+		return discoveryLoadedMsg{gen: gen, sessions: sessions, err: err}
 	}
 }
 
@@ -275,11 +301,7 @@ func (m model) filteredSessions() []registry.Session {
 }
 
 func (m model) displaySessions() []registry.Session {
-	items := m.filteredSessions()
-	if len(items) == 0 {
-		return items
-	}
-	return enrichSessionsVisible(items, m.cursor, visibleCount(layoutHeight(m.height)))
+	return m.filteredSessions()
 }
 
 func (m model) selected() (registry.Session, bool) {
@@ -493,19 +515,24 @@ func (m model) fetchPreview(seq int, id, target, revision string) tea.Cmd {
 }
 
 func (m model) reload() model {
-	return m.reloadWithSanitize(sanitizeSessionsForDisplay)
+	next, err := reloadRegistry(m.registry, m.sessions)
+	if err != nil {
+		m.statusLine = err.Error()
+		return m
+	}
+	return m.applyReload(next)
 }
 
 func (m model) reloadWithSanitize(sanitize func([]registry.Session) []registry.Session) model {
-	defer profileStart("reload")()
 	fresh, err := registry.Load(m.registry)
 	if err != nil {
 		m.statusLine = err.Error()
 		return m
 	}
-	// Registry on disk can still list panes where pi exited; sanitize before
-	// merge so periodic reloads do not resurrect pruned rows.
-	next := refreshSessionsFromRegistry(m.sessions, sanitize(fresh))
+	return m.applyReload(refreshSessionsFromRegistry(m.sessions, sanitize(fresh), nil))
+}
+
+func (m model) applyReload(next []registry.Session) model {
 	if !m.applySessionsIfChanged(next) {
 		profileNote("reload", "noop")
 		return m
@@ -593,33 +620,56 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if previewRevision(session) != msg.rev {
-			return m, nil
+			m.previewPending = ""
+			return m, (&m).schedulePreviewOpts(previewScheduleImmediate)
 		}
 		m.previewPending = ""
 		return m, (&m).schedulePreviewOpts(previewScheduleImmediate)
 
 	case registryReloadMsg:
+		if m.registryReloadInFlight {
+			return m, nil
+		}
+		m.registryReloadPending = true
+		m.registryReloadInFlight = true
+		m.registryReloadGen++
+		gen := m.registryReloadGen
+		baseKey := m.sessionsRenderKey
+		return m, m.reloadRegistryAsync(gen, baseKey)
+
+	case registryReloadedMsg:
+		if msg.gen != m.registryReloadGen || !m.registryReloadInFlight {
+			return m, nil
+		}
+		m.registryReloadInFlight = false
 		m.registryReloadPending = false
+		if m.quitting {
+			return m, tea.Quit
+		}
+		if msg.baseKey != m.sessionsRenderKey {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.statusLine = msg.err.Error()
+			return m, nil
+		}
+		if info, err := os.Stat(m.registry); err == nil {
+			m.registryMtime = info.ModTime()
+		}
 		oldRev := ""
 		if session, ok := m.selected(); ok {
 			oldRev = previewRevision(session)
 		}
 		prevKey := m.sessionsRenderKey
-		m = m.reload()
-		if info, err := os.Stat(m.registry); err == nil {
-			m.registryMtime = info.ModTime()
+		if !m.applySessionsIfChanged(msg.sessions) {
+			profileNote("reload", "noop")
+			return m, nil
 		}
-		if m.quitting {
-			return m, tea.Quit
+		m.reconcileCursor()
+		if session, ok := m.selected(); ok && m.sessionsRenderKey != prevKey && previewRevision(session) != oldRev {
+			return m, m.schedulePreview()
 		}
-		changed := m.sessionsRenderKey != prevKey
-		cmd := scheduleRegistryRefresh()
-		if changed {
-			if session, ok := m.selected(); ok && previewRevision(session) != oldRev {
-				cmd = tea.Batch(cmd, m.schedulePreview())
-			}
-		}
-		return m, cmd
+		return m, nil
 
 	case previewLiveTickMsg:
 		cmd := schedulePreviewLiveRefresh()
@@ -652,18 +702,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.schedulePreview()
 
 	case discoveryLoadedMsg:
+		if msg.gen != m.discoveryReloadGen || !m.discoveryReloadInFlight {
+			return m, nil
+		}
+		m.discoveryReloadInFlight = false
 		if msg.err != nil {
 			m.statusLine = msg.err.Error()
-			return m, scheduleDiscoveryRefresh()
+			return m, nil
 		}
 		if !m.applySessionsIfChanged(msg.sessions) {
-			return m, scheduleDiscoveryRefresh()
+			return m, nil
 		}
 		m.reconcileCursor()
-		return m, tea.Batch(scheduleDiscoveryRefresh(), m.schedulePreview())
+		return m, m.schedulePreview()
 
 	case discoveryTickMsg:
-		return m, tea.Batch(m.reloadDiscoveryAsync(), scheduleDiscoveryRefresh())
+		nextTick := scheduleDiscoveryRefresh()
+		if m.discoveryReloadInFlight {
+			return m, nextTick
+		}
+		m.discoveryReloadInFlight = true
+		m.discoveryReloadGen++
+		gen := m.discoveryReloadGen
+		return m, tea.Batch(nextTick, m.reloadDiscoveryAsync(gen))
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width

@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -16,9 +17,9 @@ type psProcess struct {
 // agentPresenceInProcessTrees reports which roots have a pi agent (piRoots) and
 // which have a pi-interactive-subagents launch script (subagentRoots) in their
 // descendant tree. One ps invocation covers every root.
-func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots, subagentRoots map[int]bool) {
+func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots, subagentRoots map[int]bool, err error) {
 	if len(roots) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if maxDepth <= 0 {
 		maxDepth = defaultProcessTreeDepth
@@ -26,11 +27,14 @@ func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots, subagentRo
 
 	out, err := execOutput("ps.process-list", "ps", "-ax", "-o", "pid=,ppid=,command=")
 	if err != nil {
-		return nil, nil
+		return nil, nil, err
 	}
 	processes, err := parsePSProcessList(string(out))
-	if err != nil || len(processes) == 0 {
-		return nil, nil
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse ps process list: %w", err)
+	}
+	if len(processes) == 0 {
+		return nil, nil, fmt.Errorf("parse ps process list: no processes")
 	}
 
 	children := make(map[int][]int, len(processes))
@@ -53,7 +57,7 @@ func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots, subagentRo
 			subagentRoots[root] = true
 		}
 	}
-	return piRoots, subagentRoots
+	return piRoots, subagentRoots, nil
 }
 
 func treeHasCommand(pid, depth int, children map[int][]int, commands map[int]string, match func(string) bool) bool {

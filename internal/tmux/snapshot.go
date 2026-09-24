@@ -104,8 +104,14 @@ func refreshSnapshot() (*Snapshot, error) {
 	// One scoped `ps -t` scan covering only the pane ttys whose command didn't
 	// already prove pi, instead of a full-system `ps -e` scan. The result is
 	// cached by tty set (see cachedPiAgentTTYs).
-	piTTYs := cachedPiAgentTTYs(scanTTYs)
-	piRoots, subagentRoots := agentPresenceInProcessTrees(checkPIDs, defaultProcessTreeDepth)
+	piTTYs, err := cachedPiAgentTTYs(scanTTYs)
+	if err != nil {
+		return nil, err
+	}
+	piRoots, subagentRoots, err := agentPresenceInProcessTrees(checkPIDs, defaultProcessTreeDepth)
+	if err != nil {
+		return nil, err
+	}
 
 	for target, info := range panes {
 		if !info.HasPiAgent {
@@ -131,9 +137,9 @@ func refreshSnapshot() (*Snapshot, error) {
 // previous ps scan when the tty set is unchanged and the result is still
 // fresh. Because ps carries a fixed ~20ms startup cost regardless of the
 // column requested, avoiding re-scans is the dominant optimization here.
-func cachedPiAgentTTYs(scanTTYs map[string]struct{}) map[string]bool {
+func cachedPiAgentTTYs(scanTTYs map[string]struct{}) (map[string]bool, error) {
 	if len(scanTTYs) == 0 {
-		return nil
+		return nil, nil
 	}
 	ttys := make([]string, 0, len(scanTTYs))
 	for tty := range scanTTYs {
@@ -145,13 +151,16 @@ func cachedPiAgentTTYs(scanTTYs map[string]struct{}) map[string]bool {
 	piScanMu.Lock()
 	defer piScanMu.Unlock()
 	if piScanKey == key && time.Since(piScanAt) < piScanTTL {
-		return piScanTTYs
+		return piScanTTYs, nil
 	}
-	result := piAgentTTYs(ttys)
+	result, err := piAgentTTYs(ttys)
+	if err != nil {
+		return nil, err
+	}
 	piScanKey = key
 	piScanTTYs = result
 	piScanAt = time.Now()
-	return result
+	return result, nil
 }
 
 func detectPiAgent(info PaneInfo) bool {

@@ -118,15 +118,15 @@ func ttyBaseName(tty string) string {
 
 // piAgentTTYs scans the given ttys once and returns the set of ttys that have
 // a pi agent running on them.
-func piAgentTTYs(ttys []string) map[string]bool {
+func piAgentTTYs(ttys []string) (map[string]bool, error) {
 	if len(ttys) == 0 {
-		return nil
+		return nil, nil
 	}
 	out, err := execOutput("ps.tty-scan", "ps", "-t", strings.Join(ttys, ","), "-o", "tty=,command=")
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return collectPiTTYs(string(out))
+	return collectPiTTYs(string(out)), nil
 }
 
 func collectPiTTYs(psOutput string) map[string]bool {

@@ -11,15 +11,6 @@ func sanitizeOptsFromSnapshot(snap *tmux.Snapshot) registry.SanitizeOptions {
 	return tmux.RegistrySanitizeOptions(snap)
 }
 
-func sanitizeSessionsForDisplay(sessions []registry.Session) []registry.Session {
-	snap, err := tmux.GetSnapshot(false)
-	if err != nil {
-		return sessions
-	}
-	sanitized, _ := registry.Sanitize(sessions, sanitizeOptsFromSnapshot(snap))
-	return sanitized
-}
-
 func loadSessionsFast(path string) ([]registry.Session, error) {
 	defer profileStart("loadSessionsFast")()
 	sessions, err := registry.Load(path)
@@ -47,7 +38,7 @@ func loadSessionsFromSnapshot(path string, snap *tmux.Snapshot, discover bool) (
 		out = mergeDiscoveredSessions(sanitized, snap)
 	}
 	registry.SortSessions(out)
-	return out, nil
+	return enrichAllFromSnapshot(out, snap), nil
 }
 
 func loadSessionsFull(path string) ([]registry.Session, error) {
@@ -57,6 +48,23 @@ func loadSessionsFull(path string) ([]registry.Session, error) {
 		return nil, err
 	}
 	return loadSessionsFromSnapshot(path, snap, true)
+}
+
+func reloadRegistry(path string, current []registry.Session) ([]registry.Session, error) {
+	defer profileStart("reload")()
+	fresh, err := registry.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	snap, err := tmux.GetSnapshot(false)
+	if err != nil {
+		return nil, err
+	}
+	// Registry on disk can still list panes where pi exited; sanitize before
+	// merge so periodic reloads do not resurrect pruned rows.
+	sanitized, _ := registry.Sanitize(fresh, sanitizeOptsFromSnapshot(snap))
+	next := refreshSessionsFromRegistry(current, sanitized, snap)
+	return enrichAllFromSnapshot(next, snap), nil
 }
 
 func reloadDiscovery(path string, current []registry.Session) ([]registry.Session, error) {
@@ -88,18 +96,6 @@ func needsEnrich(session registry.Session) bool {
 		strings.TrimSpace(session.TmuxPane) == ""
 }
 
-func enrichSession(session registry.Session) registry.Session {
-	if !needsEnrich(session) {
-		return session
-	}
-	defer profileStart("enrichSession")()
-	if snap, err := tmux.GetSnapshot(false); err == nil {
-		return enrichSessionFromSnapshot(session, snap)
-	}
-	info := tmux.PaneInfoFor(session.TmuxTarget)
-	return applyPaneInfo(session, info)
-}
-
 func enrichSessionFromSnapshot(session registry.Session, snap *tmux.Snapshot) registry.Session {
 	if !needsEnrich(session) {
 		return session
@@ -127,27 +123,12 @@ func applyPaneInfo(session registry.Session, info tmux.PaneInfo) registry.Sessio
 	return session
 }
 
-func enrichSessionsVisible(sessions []registry.Session, cursor, visible int) []registry.Session {
-	if len(sessions) == 0 {
+func enrichAllFromSnapshot(sessions []registry.Session, snap *tmux.Snapshot) []registry.Session {
+	if len(sessions) == 0 || snap == nil {
 		return sessions
 	}
-	snap, err := tmux.GetSnapshot(false)
-	if err != nil {
-		return sessions
-	}
-
-	lo := cursor - 1
-	if lo < 0 {
-		lo = 0
-	}
-	hi := cursor + visible
-	if hi >= len(sessions) {
-		hi = len(sessions) - 1
-	}
-
-	out := make([]registry.Session, len(sessions))
-	copy(out, sessions)
-	for i := lo; i <= hi; i++ {
+	out := append([]registry.Session(nil), sessions...)
+	for i := range out {
 		if needsEnrich(out[i]) {
 			out[i] = enrichSessionFromSnapshot(out[i], snap)
 		}
@@ -179,19 +160,20 @@ func mergeRegistryFields(dst, src registry.Session) registry.Session {
 	return dst
 }
 
-func paneHasLivePiAgent(target string) bool {
+func paneHasLivePiAgent(target string, snap *tmux.Snapshot) bool {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return false
 	}
-	if snap, err := tmux.GetSnapshot(false); err == nil {
+	if snap != nil {
 		return snap.HasPiAgent(target)
 	}
 	return tmux.PaneHasPiAgent(target)
 }
 
-// refreshSessionsFromRegistry updates live status fields without re-scanning tmux.
-func refreshSessionsFromRegistry(current, fresh []registry.Session) []registry.Session {
+// refreshSessionsFromRegistry updates live status fields from an existing
+// tmux snapshot.
+func refreshSessionsFromRegistry(current, fresh []registry.Session, snap *tmux.Snapshot) []registry.Session {
 	defer profileStart("refreshSessionsFromRegistry")()
 
 	freshByTarget := make(map[string]registry.Session, len(fresh))
@@ -216,21 +198,16 @@ func refreshSessionsFromRegistry(current, fresh []registry.Session) []registry.S
 			seen[target] = struct{}{}
 			continue
 		}
-		if isDiscovered(session) && paneHasLivePiAgent(target) {
+		if isDiscovered(session) && paneHasLivePiAgent(target, snap) {
 			out = append(out, session)
 		}
 	}
 
-	snap, _ := tmux.GetSnapshot(false)
 	for target, session := range freshByTarget {
 		if _, ok := seen[target]; ok {
 			continue
 		}
-		if snap != nil {
-			out = append(out, enrichSessionFromSnapshot(session, snap))
-		} else {
-			out = append(out, enrichSession(session))
-		}
+		out = append(out, session)
 	}
 	registry.SortSessions(out)
 	return out

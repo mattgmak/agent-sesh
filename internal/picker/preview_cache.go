@@ -47,7 +47,7 @@ func getPreviewCacheAny(target string) (content string, revision string, ok bool
 }
 
 func setPreviewCache(target, revision, content string, err error) {
-	if target == "" || revision == "" {
+	if target == "" || revision == "" || err != nil {
 		return
 	}
 	previewCache.Store(target, previewCacheEntry{

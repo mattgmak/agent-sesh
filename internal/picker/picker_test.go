@@ -200,6 +200,7 @@ func TestShortCWD(t *testing.T) {
 
 func TestReloadStaysOpenWhenSessionsEmpty(t *testing.T) {
 	t.Setenv("AGENT_SESH_DISABLE_DISCOVER", "1")
+	t.Setenv("PATH", t.TempDir())
 	m := testModel(sampleSessions())
 	m.registry = t.TempDir() + "/missing.json"
 	m.sessions = nil

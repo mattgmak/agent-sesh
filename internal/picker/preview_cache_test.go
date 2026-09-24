@@ -1,6 +1,7 @@
 package picker
 
 import (
+	"context"
 	"testing"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
@@ -19,6 +20,28 @@ func TestPreviewCacheRoundTrip(t *testing.T) {
 	content, err, ok := getPreviewCache(target, rev)
 	if !ok || content != "hello" || err != nil {
 		t.Fatalf("cache miss: ok=%v content=%q err=%v", ok, content, err)
+	}
+}
+
+func TestPreviewCacheDoesNotStoreCaptureError(t *testing.T) {
+	target := "%test-preview-error"
+	rev := "working\x00Shell"
+	invalidatePreviewCache(target)
+	t.Cleanup(func() { invalidatePreviewCache(target) })
+
+	if _, _, ok, _ := getPreviewCacheAny(target); ok {
+		t.Fatal("expected empty cache")
+	}
+	setPreviewCache(target, rev, "", context.DeadlineExceeded)
+	if _, _, ok, _ := getPreviewCacheAny(target); ok {
+		t.Fatal("capture error was stored in preview cache")
+	}
+
+	setPreviewCache(target, rev, "good preview", nil)
+	setPreviewCache(target, rev, "", context.DeadlineExceeded)
+	content, err, ok := getPreviewCache(target, rev)
+	if !ok || content != "good preview" || err != nil {
+		t.Fatalf("capture error replaced good cache entry: ok=%v content=%q err=%v", ok, content, err)
 	}
 }
 
@@ -82,7 +105,7 @@ func TestRefreshSessionsFromRegistry(t *testing.T) {
 		UpdatedAt:  "2026-01-02T12:00:00Z",
 	}}
 
-	got := refreshSessionsFromRegistry(current, fresh)
+	got := refreshSessionsFromRegistry(current, fresh, nil)
 	if len(got) != 1 {
 		t.Fatalf("expected one session, got %d", len(got))
 	}
