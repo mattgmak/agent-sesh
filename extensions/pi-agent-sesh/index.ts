@@ -93,7 +93,7 @@ const activeStatuses: ReadonlySet<AgentSeshStatus> = new Set([
 export function reconcileStatusOnReload(
 	isIdle: boolean,
 	currentStatus?: AgentSeshStatus,
-): Partial<Pick<AgentSeshSession, "status" | "tool_name">> {
+): { status?: AgentSeshStatus; tool_name?: string | null } {
 	if (!isIdle) {
 		return {};
 	}
@@ -592,7 +592,12 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 			if (!id) {
 				return;
 			}
-			lastTitle = sessionTitle(pi, ctx, event.prompt);
+			// pi >= 1.2 fires this for custom-message runs too; those carry no prompt.
+			const prompt = "prompt" in event ? event.prompt : undefined;
+			if (!prompt) {
+				return;
+			}
+			lastTitle = sessionTitle(pi, ctx, prompt);
 			await upsertSession({
 				id,
 				cwd: ctx.sessionManager.getCwd(),
