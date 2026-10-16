@@ -118,6 +118,7 @@ agent-sesh list         plain-text rows for fzf/scripts
 agent-sesh fzf          fzf-based picker (needs fzf)
 agent-sesh preview <id> capture-pane preview for a session
 agent-sesh debug …      registry + tmux introspection (see Development)
+agent-sesh -v           print version (also --version)
 ```
 
 ## Registry format

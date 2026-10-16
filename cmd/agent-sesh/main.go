@@ -7,11 +7,18 @@ import (
 	"github.com/mattgmak/agent-sesh/internal/counts"
 	"github.com/mattgmak/agent-sesh/internal/debug"
 	"github.com/mattgmak/agent-sesh/internal/picker"
+	"github.com/mattgmak/agent-sesh/internal/version"
 )
 
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "-v", "--version":
+			if err := version.Write(os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			return
 		case "list":
 			if err := picker.List(os.Stdout); err != nil {
 				fmt.Fprintln(os.Stderr, err)

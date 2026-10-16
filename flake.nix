@@ -21,16 +21,21 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        version = "0.1.0";
         agent-sesh = pkgs.buildGoModule {
           pname = "agent-sesh";
-          version = "0.1.0";
+          inherit version;
           src = self;
           vendorHash = null;
+          ldflags = [
+            "-X"
+            "github.com/mattgmak/agent-sesh/internal/version.Version=${version}"
+          ];
           meta.mainProgram = "agent-sesh";
         };
         tmuxPlugin = pkgs.tmuxPlugins.mkTmuxPlugin {
           pluginName = "agent-sesh";
-          version = "0.1.0";
+          inherit version;
           src = self + "/plugin";
           extraDependencies = [ agent-sesh ];
           # tmux run-shell executes the rtp file directly; nix store copies are not +x by default.
