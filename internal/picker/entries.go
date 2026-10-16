@@ -83,9 +83,11 @@ func buildMetaChunks(session registry.Session) []metaChunk {
 		agent = "pi"
 	}
 
-	chunks := []metaChunk{
-		{icon: iconSession, text: sessionName, style: sessionStyle},
+	chunks := make([]metaChunk, 0, 8)
+	if piName := strings.TrimSpace(session.PiSessionName); piName != "" {
+		chunks = append(chunks, metaChunk{icon: iconSessionName, text: piName, style: sessionNameStyle})
 	}
+	chunks = append(chunks, metaChunk{icon: iconSession, text: sessionName, style: sessionStyle})
 	if paneLabel := sessionPaneLabel(session); paneLabel != "" {
 		chunks = append(chunks, metaChunk{icon: iconPane, text: paneLabel, style: paneStyle})
 	}

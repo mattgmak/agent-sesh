@@ -44,6 +44,7 @@ const (
 	iconAgent          = "\U000F06A9" // 󰚩 robot
 	iconModel          = "\U000F09D1" // 󰧑 brain
 	iconSession        = "\U000F018D" // 󰆍 console
+	iconSessionName    = "\uf0c3"     // bookmark
 	iconPane           = "\U000F0BCC" // 󰯌 view-split-vertical
 	iconPrompt         = "\U000F036A" // 󰍪 message-text-outline
 	iconAttach         = "\U000F0339" // 󰌹 link-variant
@@ -280,6 +281,7 @@ func (m model) filteredSessions() []registry.Session {
 	for _, session := range m.sessions {
 		searchKey := strings.ToLower(strings.Join([]string{
 			session.Title,
+			session.PiSessionName,
 			session.LastPrompt,
 			session.TmuxSession,
 			session.TmuxWindow,

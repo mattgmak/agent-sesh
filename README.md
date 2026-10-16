@@ -134,6 +134,7 @@ The registry is the contract between the pi extension (writer) and the picker (r
       "cwd": "/Users/you/NixConfig",
       "branch": "main",
       "title": "agent-sesh specs",
+      "pi_session_name": "agent-sesh specs",
       "status": "tool_call",
       "tool_name": "Shell: go mod tidy",
       "model": "claude-sonnet-4",

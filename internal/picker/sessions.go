@@ -144,6 +144,7 @@ func mergeRegistryFields(dst, src registry.Session) registry.Session {
 	dst.LastPromptAt = src.LastPromptAt
 	dst.Branch = src.Branch
 	dst.Title = src.Title
+	dst.PiSessionName = src.PiSessionName
 	dst.Model = src.Model
 	if src.CWD != "" {
 		dst.CWD = src.CWD

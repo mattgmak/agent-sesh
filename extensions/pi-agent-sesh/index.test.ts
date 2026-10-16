@@ -4,10 +4,19 @@ import {
 	extractUserPromptText,
 	haltedBlocksResume,
 	reconcileStatusOnReload,
+	resolvePiSessionName,
 	resolveUpsertStatus,
 	shouldApplyStatusTransition,
 	type AgentSeshSession,
 } from "./index.ts";
+
+test("resolvePiSessionName trims, clears, and keeps stored names", () => {
+	assert.equal(resolvePiSessionName("  plan review  "), "plan review");
+	assert.equal(resolvePiSessionName(undefined, "  stored  "), "stored");
+	assert.equal(resolvePiSessionName(undefined, undefined), undefined);
+	assert.equal(resolvePiSessionName(null, "stored"), undefined);
+	assert.equal(resolvePiSessionName("   ", "stored"), undefined);
+});
 
 test("reconcileStatusOnReload downgrades active statuses when idle", () => {
 	assert.deepEqual(reconcileStatusOnReload(true, "working"), {

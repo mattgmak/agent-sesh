@@ -6,6 +6,7 @@ import type {
 	ExtensionContext,
 	MessageStartEvent,
 	SessionShutdownEvent,
+	SessionInfoChangedEvent,
 	SessionStartEvent,
 	ToolExecutionEndEvent,
 	ToolExecutionStartEvent,
@@ -36,6 +37,7 @@ export interface AgentSeshSession {
 	cwd: string;
 	branch?: string;
 	title: string;
+	pi_session_name?: string;
 	last_prompt?: string;
 	last_prompt_at?: string;
 	status: AgentSeshStatus;
@@ -365,14 +367,29 @@ function modelLabel(ctx: ExtensionContext): string | undefined {
 	return model.id;
 }
 
+function piSessionName(pi: ExtensionAPI): string | undefined {
+	const name = pi.getSessionName?.();
+	const trimmed = name?.trim();
+	return trimmed || undefined;
+}
+
+/** `undefined` keeps the stored name, `null` (cleared) drops it. */
+export function resolvePiSessionName(
+	next: string | null | undefined,
+	existing?: string,
+): string | undefined {
+	const trimmed = (next === undefined ? existing : next)?.trim();
+	return trimmed || undefined;
+}
+
 function sessionTitle(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
 	prompt?: string,
 ): string {
-	const named = pi.getSessionName?.();
-	if (named && named.trim().length > 0) {
-		return named.trim();
+	const named = piSessionName(pi);
+	if (named) {
+		return named;
 	}
 	const trimmedPrompt = prompt?.trim();
 	if (trimmedPrompt) {
@@ -405,6 +422,7 @@ export async function upsertSession(partial: {
 	status?: AgentSeshStatus;
 	tool_name?: string | null;
 	model?: string;
+	pi_session_name?: string | null;
 }): Promise<void> {
 	const target = await tmuxTarget();
 	if (!target) {
@@ -428,6 +446,10 @@ export async function upsertSession(partial: {
 			cwd: partial.cwd,
 			branch,
 			title: partial.title,
+			pi_session_name: resolvePiSessionName(
+				partial.pi_session_name,
+				existing?.pi_session_name,
+			),
 			last_prompt: partial.last_prompt ?? existing?.last_prompt,
 			last_prompt_at: promptUpdated ? now : existing?.last_prompt_at,
 			status: resolveUpsertStatus(existing, partial.status),
@@ -580,7 +602,25 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 				cwd: ctx.sessionManager.getCwd(),
 				title: lastTitle,
 				model: modelLabel(ctx),
+				pi_session_name: piSessionName(pi),
 				...statusPatch,
+			});
+		},
+	);
+
+	pi.on(
+		"session_info_changed",
+		async (event: SessionInfoChangedEvent, ctx: ExtensionContext) => {
+			const id = requireSessionId(ctx);
+			if (!id) {
+				return;
+			}
+			await upsertSession({
+				id,
+				cwd: ctx.sessionManager.getCwd(),
+				title: lastTitle,
+				model: modelLabel(ctx),
+				pi_session_name: event.name ?? null,
 			});
 		},
 	);
@@ -603,6 +643,7 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 				cwd: ctx.sessionManager.getCwd(),
 				title: lastTitle,
 				model: modelLabel(ctx),
+				pi_session_name: piSessionName(pi),
 			});
 		},
 	);
@@ -621,6 +662,7 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 				title: lastTitle,
 				last_prompt: prompt,
 				model: modelLabel(ctx),
+				pi_session_name: piSessionName(pi),
 			});
 		},
 	);
@@ -694,6 +736,7 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 				cwd: ctx.sessionManager.getCwd(),
 				title: lastTitle,
 				model: modelLabel(ctx),
+				pi_session_name: piSessionName(pi),
 				status: "halted",
 				tool_name: null,
 			});

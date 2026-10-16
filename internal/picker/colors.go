@@ -14,13 +14,15 @@ import (
 var (
 	// Entry element styles — each meta chunk gets its own hue for quick scanning.
 	sessionStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(15)).Bold(true)
-	paneStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
-	agentStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("135"))
-	modelStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
-	branchStyle  = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(14)).Bold(true)
-	toolStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(5)).Bold(true)
-	cwdStyle     = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(4)).Faint(true)
-	promptStyle  = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(7)).Faint(true)
+	// User-set pi session name (/name); bright magenta is unused by other chunks.
+	sessionNameStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(13)).Bold(true)
+	paneStyle        = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
+	agentStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("135"))
+	modelStyle       = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
+	branchStyle      = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(14)).Bold(true)
+	toolStyle        = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(5)).Bold(true)
+	cwdStyle         = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(4)).Faint(true)
+	promptStyle      = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(7)).Faint(true)
 
 	dimStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8)).Faint(true)
 	faintStyle = lipgloss.NewStyle().Faint(true)

@@ -28,6 +28,8 @@ func writeSessionRenderFields(b *strings.Builder, session registry.Session) {
 	b.WriteByte('\x00')
 	b.WriteString(session.Title)
 	b.WriteByte('\x00')
+	b.WriteString(session.PiSessionName)
+	b.WriteByte('\x00')
 	b.WriteString(session.LastPrompt)
 	b.WriteByte('\x00')
 	b.WriteString(session.Branch)

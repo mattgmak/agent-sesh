@@ -67,6 +67,32 @@ func TestFilteredSessionsNoFilter(t *testing.T) {
 	}
 }
 
+func TestFilteredSessionsByPiSessionName(t *testing.T) {
+	sessions := []registry.Session{
+		{
+			ID:            "1",
+			TmuxTarget:    "%1",
+			TmuxSession:   "a",
+			PiSessionName: "Bookmarked Flow",
+			Status:        registry.StatusIdle,
+			Agent:         "pi",
+		},
+		{
+			ID:          "2",
+			TmuxTarget:  "%2",
+			TmuxSession: "b",
+			Status:      registry.StatusIdle,
+			Agent:       "pi",
+		},
+	}
+	m := testModel(sessions)
+	m.filter.SetValue("bookmarked flow")
+	got := m.filteredSessions()
+	if len(got) != 1 || got[0].ID != "1" {
+		t.Fatalf("filtered by pi session name: got %+v", got)
+	}
+}
+
 func TestFilteredSessionsByTitle(t *testing.T) {
 	m := testModel(sampleSessions())
 	m.filter.SetValue("other")

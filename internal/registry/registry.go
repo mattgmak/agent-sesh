@@ -35,21 +35,23 @@ func NormalizeStatus(status Status) Status {
 }
 
 type Session struct {
-	ID           string `json:"id"`
-	TmuxTarget   string `json:"tmux_target"`
-	TmuxSession  string `json:"tmux_session,omitempty"`
-	TmuxWindow   string `json:"tmux_window,omitempty"`
-	TmuxPane     string `json:"tmux_pane,omitempty"`
-	CWD          string `json:"cwd"`
-	Title        string `json:"title"`
-	LastPrompt   string `json:"last_prompt,omitempty"`
-	LastPromptAt string `json:"last_prompt_at,omitempty"`
-	Branch       string `json:"branch"`
-	Agent        string `json:"agent"`
-	Model        string `json:"model,omitempty"`
-	Status       Status `json:"status"`
-	ToolName     string `json:"tool_name"`
-	UpdatedAt    string `json:"updated_at,omitempty"`
+	ID          string `json:"id"`
+	TmuxTarget  string `json:"tmux_target"`
+	TmuxSession string `json:"tmux_session,omitempty"`
+	TmuxWindow  string `json:"tmux_window,omitempty"`
+	TmuxPane    string `json:"tmux_pane,omitempty"`
+	CWD         string `json:"cwd"`
+	Title       string `json:"title"`
+	// PiSessionName is the pi session custom name (/name), empty when unset.
+	PiSessionName string `json:"pi_session_name,omitempty"`
+	LastPrompt    string `json:"last_prompt,omitempty"`
+	LastPromptAt  string `json:"last_prompt_at,omitempty"`
+	Branch        string `json:"branch"`
+	Agent         string `json:"agent"`
+	Model         string `json:"model,omitempty"`
+	Status        Status `json:"status"`
+	ToolName      string `json:"tool_name"`
+	UpdatedAt     string `json:"updated_at,omitempty"`
 }
 
 type File struct {

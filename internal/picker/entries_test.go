@@ -173,6 +173,46 @@ func TestFormatSessionEntryMultilinePromptSingleLine(t *testing.T) {
 	}
 }
 
+func TestBuildMetaChunksPiSessionNamePrecedesSession(t *testing.T) {
+	session := registry.Session{
+		TmuxSession:   "demo",
+		PiSessionName: "plan review",
+		Status:        registry.StatusIdle,
+		Agent:         "pi",
+	}
+
+	chunks := buildMetaChunks(session)
+	if len(chunks) < 2 {
+		t.Fatalf("expected name + session chunks, got %d", len(chunks))
+	}
+	if chunks[0].icon != iconSessionName || chunks[0].text != "plan review" {
+		t.Fatalf("expected pi session name first, got %+v", chunks[0])
+	}
+	if chunks[1].icon != iconSession || chunks[1].text != "demo" {
+		t.Fatalf("expected tmux session second, got %+v", chunks[1])
+	}
+
+	line := formatSessionEntry(session, 80)[0]
+	if !strings.Contains(line, iconSessionName) || !strings.Contains(line, "plan review") {
+		t.Fatalf("expected rendered session name, got %q", line)
+	}
+}
+
+func TestBuildMetaChunksHidesEmptyPiSessionName(t *testing.T) {
+	session := registry.Session{TmuxSession: "demo", Status: registry.StatusIdle, Agent: "pi"}
+
+	for _, chunks := range [][]metaChunk{buildMetaChunks(session), buildMetaChunks(registry.Session{TmuxSession: "demo", PiSessionName: "   ", Status: registry.StatusIdle, Agent: "pi"})} {
+		if chunks[0].icon != iconSession || chunks[0].text != "demo" {
+			t.Fatalf("expected session chunk first when name unset, got %+v", chunks[0])
+		}
+		for _, chunk := range chunks {
+			if chunk.icon == iconSessionName {
+				t.Fatalf("unexpected session name chunk: %+v", chunk)
+			}
+		}
+	}
+}
+
 func TestRenderIconTextChunkTruncatesWithEllipsis(t *testing.T) {
 	got := renderIconTextChunk(iconSession, strings.Repeat("x", 40), sessionStyle, 12)
 	if !strings.Contains(got, "…") {
