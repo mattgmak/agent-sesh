@@ -32,9 +32,14 @@ func Sanitize(sessions []Session, opts SanitizeOptions) ([]Session, []PruneReaso
 	kept := make([]Session, 0, len(sessions))
 	removed := make([]PruneReason, 0)
 
+	deduped, duplicates := dedupeBySessionID(sessions, now)
+	for _, session := range duplicates {
+		removed = append(removed, PruneReason{Session: session, Reason: "duplicate session id"})
+	}
+
 	// Keep the newest row per tmux pane target.
-	byTarget := make(map[string]Session, len(sessions))
-	for _, session := range sessions {
+	byTarget := make(map[string]Session, len(deduped))
+	for _, session := range deduped {
 		target := strings.TrimSpace(session.TmuxTarget)
 		if target == "" {
 			removed = append(removed, PruneReason{Session: session, Reason: "missing tmux target"})

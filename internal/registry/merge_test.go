@@ -31,6 +31,39 @@ func TestMergeSessionsKeepsNewestPerTarget(t *testing.T) {
 	}
 }
 
+func TestMergeSessionsDropsStaleRowForSameSessionID(t *testing.T) {
+	now := time.Date(2026, 10, 16, 8, 24, 0, 0, time.UTC)
+	stale := []Session{
+		{ID: "01a13dbe", TmuxTarget: "%175", UpdatedAt: now.Add(-time.Minute).Format(time.RFC3339), PiSessionName: "masta"},
+	}
+	current := []Session{
+		{ID: "01a13dbe", TmuxTarget: "%11", UpdatedAt: now.Format(time.RFC3339), PiSessionName: "masta"},
+		{ID: "01a14328", TmuxTarget: "%112", UpdatedAt: now.Format(time.RFC3339)},
+	}
+
+	got := MergeSessions(stale, current)
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2: %+v", len(got), got)
+	}
+	byID := map[string]Session{}
+	for _, session := range got {
+		byID[session.ID] = session
+	}
+	if byID["01a13dbe"].TmuxTarget != "%11" {
+		t.Fatalf("session 01a13dbe = %+v, want newest target %%11", byID["01a13dbe"])
+	}
+	if byID["01a14328"].TmuxTarget != "%112" {
+		t.Fatalf("session 01a14328 = %+v", byID["01a14328"])
+	}
+}
+
+func TestMergeSessionsKeepsIdlessRows(t *testing.T) {
+	got := MergeSessions([]Session{{TmuxTarget: "%1"}, {TmuxTarget: "%2"}})
+	if len(got) != 2 {
+		t.Fatalf("MergeSessions() = %+v, want both id-less rows", got)
+	}
+}
+
 func TestFilterPersistableDropsDiscovered(t *testing.T) {
 	sessions := []Session{
 		{ID: "real", TmuxTarget: "%1"},

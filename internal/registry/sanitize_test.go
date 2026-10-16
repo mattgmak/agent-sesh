@@ -26,6 +26,43 @@ func TestSanitizeDedupesByTargetKeepsNewest(t *testing.T) {
 	}
 }
 
+func TestSanitizeDedupesBySessionIDKeepsNewest(t *testing.T) {
+	now := time.Date(2026, 10, 16, 8, 24, 0, 0, time.UTC)
+	sessions := []Session{
+		{ID: "01a13dbe", TmuxTarget: "%11", UpdatedAt: now.Add(-time.Minute).Format(time.RFC3339), PiSessionName: "masta"},
+		{ID: "01a13dbe", TmuxTarget: "%175", UpdatedAt: now.Format(time.RFC3339), PiSessionName: "masta"},
+	}
+
+	kept, removed := Sanitize(sessions, SanitizeOptions{
+		PaneExists: func(string) bool { return true },
+		HasAgent:   func(string, string) bool { return true },
+		Now:        func() time.Time { return now },
+	})
+
+	if len(kept) != 1 || kept[0].TmuxTarget != "%175" {
+		t.Fatalf("kept = %+v, want only the newest row %%175", kept)
+	}
+	if len(removed) != 1 || removed[0].Reason != "duplicate session id" || removed[0].Session.TmuxTarget != "%11" {
+		t.Fatalf("removed = %+v, want stale %%11 row", removed)
+	}
+}
+
+func TestSanitizeKeepsDistinctAnonymousRows(t *testing.T) {
+	sessions := []Session{
+		{TmuxTarget: "%1"},
+		{TmuxTarget: "%2"},
+	}
+
+	kept, _ := Sanitize(sessions, SanitizeOptions{
+		PaneExists: func(string) bool { return true },
+		HasAgent:   func(string, string) bool { return true },
+	})
+
+	if len(kept) != 2 {
+		t.Fatalf("kept = %+v, want both id-less rows", kept)
+	}
+}
+
 func TestSanitizeDropsMissingPaneAndNonAgent(t *testing.T) {
 	sessions := []Session{
 		{ID: "gone", TmuxTarget: "%1", Agent: "pi"},

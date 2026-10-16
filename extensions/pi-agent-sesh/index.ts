@@ -205,7 +205,7 @@ export function haltedBlocksResume(
 	return haltedAt >= opts.resumeIfHaltedBefore;
 }
 
-function mergeSessions(
+export function mergeSessions(
 	...lists: AgentSeshSession[][]
 ): AgentSeshSession[] {
 	const byTarget = new Map<string, AgentSeshSession>();
@@ -221,7 +221,24 @@ function mergeSessions(
 			}
 		}
 	}
-	return [...byTarget.values()];
+
+	// One row per pi session. A session registered from a pane it no longer runs
+	// in would otherwise leave its previous pane's row behind, so the picker
+	// renders the same named session twice and one entry targets the wrong pane.
+	const byID = new Map<string, AgentSeshSession>();
+	const anonymous: AgentSeshSession[] = [];
+	for (const session of byTarget.values()) {
+		const id = session.id.trim();
+		if (!id) {
+			anonymous.push(session);
+			continue;
+		}
+		const existing = byID.get(id);
+		if (!existing || !sessionUpdatedAfter(existing, session)) {
+			byID.set(id, session);
+		}
+	}
+	return [...byID.values(), ...anonymous];
 }
 
 async function readRegistry(): Promise<RegistryFile> {
@@ -265,6 +282,14 @@ async function updateRegistry(
 	});
 }
 
+// display-message without -t resolves against the attached client's current
+// pane, not the pane issuing the command, so a background pane registers the
+// pane the user happens to be looking at. -t pins the query to our own pane.
+function tmuxPaneArgs(): string[] {
+	const pane = process.env.TMUX_PANE?.trim();
+	return pane ? ["-t", pane] : [];
+}
+
 async function tmuxSessionName(): Promise<string | undefined> {
 	if (!process.env.TMUX) {
 		return undefined;
@@ -273,6 +298,7 @@ async function tmuxSessionName(): Promise<string | undefined> {
 		const { stdout } = await execFileAsync("tmux", [
 			"display-message",
 			"-p",
+			...tmuxPaneArgs(),
 			"#{session_name}",
 		]);
 		const name = stdout.trim();
@@ -292,6 +318,7 @@ async function tmuxPaneLocation(): Promise<
 		const { stdout } = await execFileAsync("tmux", [
 			"display-message",
 			"-p",
+			...tmuxPaneArgs(),
 			"#{window_index}\t#{pane_index}",
 		]);
 		const [window, pane] = stdout.trim().split("\t");
@@ -312,6 +339,7 @@ async function tmuxTarget(): Promise<string | null> {
 		const { stdout } = await execFileAsync("tmux", [
 			"display-message",
 			"-p",
+			...tmuxPaneArgs(),
 			"#{pane_id}",
 		]);
 		return stdout.trim() || null;
@@ -328,6 +356,7 @@ async function tmuxPaneCwd(): Promise<string | undefined> {
 		const { stdout } = await execFileAsync("tmux", [
 			"display-message",
 			"-p",
+			...tmuxPaneArgs(),
 			"#{pane_current_path}",
 		]);
 		const cwd = stdout.trim();

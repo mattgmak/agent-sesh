@@ -6,6 +6,7 @@ import {
 	reconcileStatusOnReload,
 	resolvePiSessionName,
 	resolveUpsertStatus,
+	mergeSessions,
 	shouldApplyStatusTransition,
 	type AgentSeshSession,
 } from "./index.ts";
@@ -16,6 +17,38 @@ test("resolvePiSessionName trims, clears, and keeps stored names", () => {
 	assert.equal(resolvePiSessionName(undefined, undefined), undefined);
 	assert.equal(resolvePiSessionName(null, "stored"), undefined);
 	assert.equal(resolvePiSessionName("   ", "stored"), undefined);
+});
+
+test("mergeSessions drops stale rows for one pi session", () => {
+	const base = {
+		cwd: "/tmp",
+		title: "masta",
+		pi_session_name: "masta",
+		status: "idle",
+		agent: "pi",
+		updated_at: "2026-10-16T08:18:21.499Z",
+	} as const;
+	const stale = {
+		...base,
+		id: "01a13dbe",
+		tmux_target: "%175",
+	} as unknown as AgentSeshSession;
+	const current = {
+		...base,
+		id: "01a13dbe",
+		tmux_target: "%11",
+		updated_at: "2026-10-16T08:24:43.119Z",
+	} as unknown as AgentSeshSession;
+	const other = {
+		...base,
+		id: "01a14328",
+		tmux_target: "%112",
+	} as unknown as AgentSeshSession;
+
+	const merged = mergeSessions([stale, other], [current]);
+	assert.equal(merged.length, 2);
+	assert.equal(merged.find((s) => s.id === "01a13dbe")?.tmux_target, "%11");
+	assert.equal(merged.find((s) => s.id === "01a14328")?.tmux_target, "%112");
 });
 
 test("reconcileStatusOnReload downgrades active statuses when idle", () => {

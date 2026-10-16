@@ -44,7 +44,7 @@ const (
 	iconAgent          = "\U000F06A9" // 󰚩 robot
 	iconModel          = "\U000F09D1" // 󰧑 brain
 	iconSession        = "\U000F018D" // 󰆍 console
-	iconSessionName    = "\uf02e"     //  bookmark
+	iconSessionName    = "\U0000F02E" //  bookmark
 	iconPane           = "\U000F0BCC" // 󰯌 view-split-vertical
 	iconPrompt         = "\U000F036A" // 󰍪 message-text-outline
 	iconAttach         = "\U000F0339" // 󰌹 link-variant
