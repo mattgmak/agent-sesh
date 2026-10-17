@@ -62,7 +62,12 @@ function registryLockPath(): string {
 	return `${registryPath()}.lock`;
 }
 
+async function ensureRegistryDir(): Promise<void> {
+	await mkdir(dirname(registryPath()), { recursive: true });
+}
+
 async function withRegistryLock<T>(fn: () => Promise<T>): Promise<T> {
+	await ensureRegistryDir();
 	return withRegistryFileLock(registryLockPath(), fn);
 }
 
@@ -263,7 +268,6 @@ async function refreshTmuxStatusBar(): Promise<void> {
 
 async function writeRegistryUnlocked(file: RegistryFile): Promise<void> {
 	const path = registryPath();
-	await mkdir(dirname(path), { recursive: true });
 	const tmp = `${path}.tmp`;
 	const body = `${JSON.stringify(file, null, 2)}\n`;
 	await writeFile(tmp, body, "utf8");
