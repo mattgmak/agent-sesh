@@ -350,6 +350,37 @@ func TestFzfNavigationKeysMoveCursor(t *testing.T) {
 	}
 }
 
+func TestEachNavKeyMovesCursor(t *testing.T) {
+	m := testModel(sampleSessions())
+	m.reconcileCursor()
+	n := len(m.filteredSessions())
+	if n < 3 {
+		t.Fatalf("need 3+ sessions, got %d", n)
+	}
+	start := m.cursor
+	prev := start
+	for i := 1; i <= 3; i++ {
+		next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+		m = next.(model)
+		want := ((start-i)%n + n) % n
+		if m.cursor != want {
+			t.Fatalf("after %d keys: cursor %d, want %d", i, m.cursor, want)
+		}
+		if step := ((prev-m.cursor)%n + n) % n; step != 1 {
+			t.Fatalf("after %d keys: step %d, want 1", i, step)
+		}
+		prev = m.cursor
+	}
+	for i := 1; i <= 2; i++ {
+		next, _ := m.Update(tea.KeyPressMsg{Mod: tea.ModShift, Code: tea.KeyTab})
+		m = next.(model)
+		want := ((start-3+i)%n + n) % n
+		if m.cursor != want {
+			t.Fatalf("after %d up keys: cursor %d, want %d", i, m.cursor, want)
+		}
+	}
+}
+
 func TestFormatSessionLineMultiline(t *testing.T) {
 	line := formatSessionLine(sampleSessions()[0], 120)
 	if !strings.Contains(line, "\n") {

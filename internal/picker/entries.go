@@ -14,24 +14,54 @@ type metaChunk struct {
 	style lipgloss.Style
 }
 
+// isPlainASCII reports whether every byte is printable ASCII, where one byte
+// is one cell and no escape or control sequence can appear.
+func isPlainASCII(text string) bool {
+	for i := 0; i < len(text); i++ {
+		if text[i] < 0x20 || text[i] >= 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// ellipsis cuts text to fit width cells, appending an ellipsis cell. Plain
+// ASCII slices at the byte offset; any other text binary searches the longest
+// fitting prefix, so wide, combining, emoji and ANSI input measures as before.
 func ellipsis(text string, width int) string {
 	if width < 1 {
 		return "…"
 	}
+	if isPlainASCII(text) {
+		if len(text) <= width {
+			return text
+		}
+		if width == 1 {
+			return "…"
+		}
+		return text[:width-1] + "…"
+	}
 	if lipgloss.Width(text) <= width {
 		return text
 	}
+	// The measured width only grows with the prefix, so binary search the longest
+	// prefix that leaves one cell for the ellipsis. That is O(log n) measures
+	// where dropping one rune per step was O(n^2) with a string per step.
 	runes := []rune(text)
-	for len(runes) > 0 && lipgloss.Width(string(runes))+1 > width {
-		if len(runes) == 1 {
-			return "…"
+	limit := width - 1
+	lo, hi := 0, len(runes)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if lipgloss.Width(string(runes[:mid])) <= limit {
+			lo = mid
+		} else {
+			hi = mid - 1
 		}
-		runes = runes[:len(runes)-1]
 	}
-	if len(runes) == 0 {
+	if lo == 0 {
 		return "…"
 	}
-	return string(runes) + "…"
+	return string(runes[:lo]) + "…"
 }
 
 func shortCWD(path string) string {

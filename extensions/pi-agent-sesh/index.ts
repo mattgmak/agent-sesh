@@ -20,6 +20,12 @@ import { withRegistryFileLock } from "./registry-lock.ts";
 
 const execFileAsync = promisify(execFile);
 
+/** Bound on tmux refresh-client; it must never hold a caller for long. */
+const refreshTimeoutMs = 1000;
+/** Branch lookups per worktree are reused briefly to skip a git exec per event. */
+const branchCacheMs = 5000;
+const branchCache = new Map<string, { branch?: string; at: number }>();
+
 export type AgentSeshStatus =
 	| "unknown"
 	| "idle"
@@ -260,7 +266,10 @@ async function refreshTmuxStatusBar(): Promise<void> {
 		return;
 	}
 	try {
-		await execFileAsync("tmux", ["refresh-client", "-S"]);
+		// Bounded: a hung tmux server must not stall the caller.
+		await execFileAsync("tmux", ["refresh-client", "-S"], {
+			timeout: refreshTimeoutMs,
+		});
 	} catch {
 		// best-effort; status bar still updates on status-interval
 	}
@@ -272,7 +281,6 @@ async function writeRegistryUnlocked(file: RegistryFile): Promise<void> {
 	const body = `${JSON.stringify(file, null, 2)}\n`;
 	await writeFile(tmp, body, "utf8");
 	await rename(tmp, path);
-	await refreshTmuxStatusBar();
 }
 
 async function updateRegistry(
@@ -284,6 +292,9 @@ async function updateRegistry(
 		const merged = mergeSessions(latest.sessions, nextSessions);
 		await writeRegistryUnlocked({ version: 1, sessions: merged });
 	});
+	// Outside the flock: peers poll the lock, so a slow tmux exec here would
+	// stall every other pi session for up to the lock timeout.
+	await refreshTmuxStatusBar();
 }
 
 // display-message without -t resolves against the attached client's current
@@ -294,27 +305,16 @@ function tmuxPaneArgs(): string[] {
 	return pane ? ["-t", pane] : [];
 }
 
-async function tmuxSessionName(): Promise<string | undefined> {
-	if (!process.env.TMUX) {
-		return undefined;
-	}
-	try {
-		const { stdout } = await execFileAsync("tmux", [
-			"display-message",
-			"-p",
-			...tmuxPaneArgs(),
-			"#{session_name}",
-		]);
-		const name = stdout.trim();
-		return name || undefined;
-	} catch {
-		return undefined;
-	}
+interface PaneFacts {
+	target: string;
+	session?: string;
+	window?: string;
+	pane?: string;
 }
 
-async function tmuxPaneLocation(): Promise<
-	{ window: string; pane: string } | undefined
-> {
+// tmuxPaneFacts resolves pane id, session name and window/pane indexes in one
+// display-message call instead of three serial ones.
+async function tmuxPaneFacts(): Promise<PaneFacts | undefined> {
 	if (!process.env.TMUX) {
 		return undefined;
 	}
@@ -323,13 +323,18 @@ async function tmuxPaneLocation(): Promise<
 			"display-message",
 			"-p",
 			...tmuxPaneArgs(),
-			"#{window_index}\t#{pane_index}",
+			"#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}",
 		]);
-		const [window, pane] = stdout.trim().split("\t");
-		if (!window || !pane) {
+		const [target, session, window, pane] = stdout.trim().split("\t");
+		if (!target) {
 			return undefined;
 		}
-		return { window, pane };
+		return {
+			target,
+			session: session || undefined,
+			window: window || undefined,
+			pane: pane || undefined,
+		};
 	} catch {
 		return undefined;
 	}
@@ -371,17 +376,27 @@ async function tmuxPaneCwd(): Promise<string | undefined> {
 }
 
 async function gitBranch(cwd: string): Promise<string | undefined> {
+	const key = cwd.trim();
+	if (!key) {
+		return undefined;
+	}
+	const cached = branchCache.get(key);
+	if (cached && Date.now() - cached.at < branchCacheMs) {
+		return cached.branch;
+	}
 	try {
 		const { stdout } = await execFileAsync("git", [
 			"-C",
-			cwd,
+			key,
 			"rev-parse",
 			"--abbrev-ref",
 			"HEAD",
 		]);
-		const branch = stdout.trim();
-		return branch || undefined;
+		const branch = stdout.trim() || undefined;
+		branchCache.set(key, { branch, at: Date.now() });
+		return branch;
 	} catch {
+		branchCache.set(key, { branch: undefined, at: Date.now() });
 		return undefined;
 	}
 }
@@ -457,14 +472,15 @@ export async function upsertSession(partial: {
 	model?: string;
 	pi_session_name?: string | null;
 }): Promise<void> {
-	const target = await tmuxTarget();
-	if (!target) {
+	const facts = await tmuxPaneFacts();
+	if (!facts) {
 		return;
 	}
+	const target = facts.target;
 
 	const branch = await gitBranch(partial.cwd);
-	const tmuxSession = await tmuxSessionName();
-	const paneLocation = await tmuxPaneLocation();
+	const tmuxSession = facts.session;
+	const paneLocation = facts.window && facts.pane ? facts : undefined;
 	const now = new Date().toISOString();
 
 	await updateRegistry((file) => {
@@ -514,6 +530,7 @@ export async function removeSession(
 		return;
 	}
 
+	let removed = false;
 	await withRegistryLock(async () => {
 		const latest = await readRegistry();
 		const nextSessions = latest.sessions.filter((session) => {
@@ -529,7 +546,11 @@ export async function removeSession(
 			return;
 		}
 		await writeRegistryUnlocked({ version: 1, sessions: nextSessions });
+		removed = true;
 	});
+	if (removed) {
+		await refreshTmuxStatusBar();
+	}
 }
 
 function findSessionIndex(

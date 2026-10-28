@@ -78,6 +78,24 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 }
 
+func TestSaveWithMissingStateDir(t *testing.T) {
+	// Regression: the lock file was opened before the state dir existed, so a
+	// fresh install could not save.
+	path := filepath.Join(t.TempDir(), "agent-sesh", "nested", "sessions.json")
+	sessions := []Session{{ID: "abc", TmuxTarget: "%1", Status: StatusIdle, Agent: "pi"}}
+
+	if err := Save(path, sessions); err != nil {
+		t.Fatalf("Save with missing state dir: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "abc" {
+		t.Fatalf("got %+v, want one abc session", got)
+	}
+}
+
 func TestPruneMissingPanes(t *testing.T) {
 	sessions := []Session{
 		{TmuxTarget: "%1"},

@@ -3,6 +3,7 @@ package registry
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -14,6 +15,10 @@ const lockTimeout = 5 * time.Second
 // extension uses the same lock file via koffi (see registry-lock.ts).
 func withRegistryLock(path string, fn func() error) error {
 	lockPath := path + ".lock"
+	// The state dir may not exist yet on a fresh install; the lock file needs it.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create registry dir %s: %w", filepath.Dir(path), err)
+	}
 	deadline := time.Now().Add(lockTimeout)
 	for {
 		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)

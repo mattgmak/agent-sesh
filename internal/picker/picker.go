@@ -135,6 +135,7 @@ type model struct {
 	discoveryReloadInFlight bool
 	discoveryReloadGen      int
 	sessionsRenderKey       string
+	filterCache             *sessionFilterCache
 	previewLastFetch        time.Time
 }
 
@@ -183,11 +184,12 @@ func Run() error {
 	rename.SetStyles(renameStyles)
 
 	m := model{
-		sessions: sessions,
-		filter:   filter,
-		rename:   rename,
-		registry: path,
-		loading:  true,
+		sessions:    sessions,
+		filter:      filter,
+		rename:      rename,
+		registry:    path,
+		loading:     true,
+		filterCache: &sessionFilterCache{},
 	}
 	if info, err := os.Stat(path); err == nil {
 		m.registryMtime = info.ModTime()
@@ -196,7 +198,7 @@ func Run() error {
 	(&m).syncSessionsRenderKey()
 
 	profile := detectColorProfile()
-	opts := []tea.ProgramOption{tea.WithColorProfile(profile)}
+	opts := []tea.ProgramOption{tea.WithColorProfile(profile), tea.WithFPS(30)}
 	if term := strings.TrimSpace(os.Getenv("TERM")); term != "" {
 		opts = append(opts, tea.WithEnvironment(append(os.Environ(), "TERM="+term)))
 	}
@@ -272,32 +274,80 @@ func (m model) reloadDiscoveryAsync(gen int) tea.Cmd {
 	}
 }
 
+// sessionFilterCache memoises filter work for one registry revision: the
+// lowercased search haystack per session plus the last filtered result.
+type sessionFilterCache struct {
+	renderKey string
+	count     int
+	haystacks []string
+	query     string
+	items     []registry.Session
+}
+
+func (c *sessionFilterCache) fresh(renderKey string, count int) bool {
+	return c != nil && c.renderKey == renderKey && c.count == count
+}
+
+func sessionSearchText(session registry.Session) string {
+	return strings.ToLower(strings.Join([]string{
+		session.Title,
+		session.PiSessionName,
+		session.LastPrompt,
+		session.TmuxSession,
+		session.TmuxWindow,
+		session.TmuxPane,
+		sessionPaneLabel(session),
+		session.CWD,
+		session.Branch,
+		string(session.Status),
+		session.ToolName,
+		session.Agent,
+		session.Model,
+		session.TmuxTarget,
+	}, " "))
+}
+
+func (m model) searchHaystacks(cache *sessionFilterCache) []string {
+	haystacks := make([]string, len(m.sessions))
+	for i, session := range m.sessions {
+		haystacks[i] = sessionSearchText(session)
+	}
+	if cache != nil {
+		cache.renderKey = m.sessionsRenderKey
+		cache.count = len(m.sessions)
+		cache.haystacks = haystacks
+		cache.query = ""
+		cache.items = nil
+	}
+	return haystacks
+}
+
 func (m model) filteredSessions() []registry.Session {
 	query := strings.TrimSpace(strings.ToLower(m.filter.Value()))
 	if query == "" {
 		return m.sessions
 	}
+	cache := m.filterCache
+	cached := cache.fresh(m.sessionsRenderKey, len(m.sessions))
+	if cached && cache.query == query {
+		return cache.items
+	}
+	var haystacks []string
+	if cached {
+		haystacks = cache.haystacks
+	}
+	if len(haystacks) != len(m.sessions) {
+		haystacks = m.searchHaystacks(cache)
+	}
 	out := make([]registry.Session, 0, len(m.sessions))
-	for _, session := range m.sessions {
-		searchKey := strings.ToLower(strings.Join([]string{
-			session.Title,
-			session.PiSessionName,
-			session.LastPrompt,
-			session.TmuxSession,
-			session.TmuxWindow,
-			session.TmuxPane,
-			sessionPaneLabel(session),
-			session.CWD,
-			session.Branch,
-			string(session.Status),
-			session.ToolName,
-			session.Agent,
-			session.Model,
-			session.TmuxTarget,
-		}, " "))
-		if strings.Contains(searchKey, query) {
+	for i, session := range m.sessions {
+		if strings.Contains(haystacks[i], query) {
 			out = append(out, session)
 		}
+	}
+	if cache != nil {
+		cache.query = query
+		cache.items = out
 	}
 	return out
 }

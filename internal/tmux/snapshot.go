@@ -1,11 +1,16 @@
 package tmux
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mattgmak/agent-sesh/internal/registry"
 )
 
 const (
@@ -13,8 +18,11 @@ const (
 	// piScanTTL bounds how stale the tty→pi detection result may get when the
 	// set of ttys to scan is unchanged. ps has a fixed ~20ms startup cost on
 	// macOS, so this cache avoids re-paying it on every snapshot refresh.
-	piScanTTL      = 15 * time.Second
-	paneListFormat = "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}\t#{pane_pid}"
+	piScanTTL = 15 * time.Second
+	// snapshotFileName holds the last snapshot for short-lived processes such
+	// as the counts status line, which cannot reuse in-process memory.
+	snapshotFileName = "pane-snapshot.json"
+	paneListFormat   = "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}\t#{pane_pid}"
 )
 
 // Snapshot is a cached tmux list-panes result used to avoid per-pane subprocess storms.
@@ -32,13 +40,27 @@ var (
 	piScanKey  string
 	piScanTTYs map[string]bool
 	piScanAt   time.Time
+
+	// refreshMu guards refreshInFlight so one scan runs at a time; callers that
+	// arrive mid-scan wait for and share that scan's result.
+	refreshMu       sync.Mutex
+	refreshInFlight *refreshCall
 )
 
-// InvalidateSnapshot drops the in-memory pane snapshot.
+type refreshCall struct {
+	done chan struct{}
+	snap *Snapshot
+	err  error
+}
+
+// InvalidateSnapshot drops the in-memory pane snapshot and its disk copy.
 func InvalidateSnapshot() {
 	snapshotMu.Lock()
 	snapshotCache = nil
 	snapshotMu.Unlock()
+	if path, err := snapshotFilePath(); err == nil {
+		_ = os.Remove(path)
+	}
 }
 
 // GetSnapshot returns a cached pane snapshot, refreshing when stale or forced.
@@ -53,7 +75,29 @@ func GetSnapshot(force bool) (*Snapshot, error) {
 	return refreshSnapshot()
 }
 
+// refreshSnapshot runs the pane scan single-flight: concurrent callers wait for
+// the in-flight scan instead of repeating its tmux/ps execs.
 func refreshSnapshot() (*Snapshot, error) {
+	refreshMu.Lock()
+	if call := refreshInFlight; call != nil {
+		refreshMu.Unlock()
+		<-call.done
+		return call.snap, call.err
+	}
+	call := &refreshCall{done: make(chan struct{})}
+	refreshInFlight = call
+	refreshMu.Unlock()
+
+	call.snap, call.err = fetchSnapshot()
+
+	refreshMu.Lock()
+	refreshInFlight = nil
+	refreshMu.Unlock()
+	close(call.done)
+	return call.snap, call.err
+}
+
+func fetchSnapshot() (*Snapshot, error) {
 	out, err := execOutput("tmux.list-panes", "tmux", "list-panes", "-a", "-F", paneListFormat)
 	if err != nil {
 		return nil, err
@@ -133,6 +177,82 @@ func refreshSnapshot() (*Snapshot, error) {
 	return snap, nil
 }
 
+// CachedSnapshot returns the snapshot persisted by SaveSnapshot when it is
+// younger than maxAge. It never execs tmux, so a status line can answer from
+// it. A missing, unreadable, or stale file returns (nil, nil).
+func CachedSnapshot(maxAge time.Duration) (*Snapshot, error) {
+	path, err := snapshotFilePath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var file snapshotFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		return nil, err
+	}
+	if len(file.Panes) == 0 || time.Since(file.FetchedAt) >= maxAge {
+		return nil, nil
+	}
+	return &Snapshot{panes: file.Panes, fetchedAt: file.FetchedAt}, nil
+}
+
+// SaveSnapshot persists snap for short-lived processes that cannot reuse
+// in-process memory. Concurrent writers are safe: the file is replaced by rename.
+func SaveSnapshot(snap *Snapshot) error {
+	if snap == nil {
+		return nil
+	}
+	path, err := snapshotFilePath()
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(snapshotFile{FetchedAt: snap.fetchedAt, Panes: snap.panes})
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".pane-snapshot-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
+
+type snapshotFile struct {
+	FetchedAt time.Time           `json:"fetched_at"`
+	Panes     map[string]PaneInfo `json:"panes"`
+}
+
+// snapshotFilePath keeps the disk snapshot beside the registry.
+func snapshotFilePath() (string, error) {
+	registryPath, err := registry.DefaultPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(registryPath), snapshotFileName), nil
+}
+
 // cachedPiAgentTTYs returns the tty→pi map for the given ttys, reusing the
 // previous ps scan when the tty set is unchanged and the result is still
 // fresh. Because ps carries a fixed ~20ms startup cost regardless of the
@@ -176,6 +296,12 @@ func detectPiAgent(info PaneInfo) bool {
 
 func isPiCommand(current, start string) bool {
 	return isPiProcessLine(current) || isPiProcessLine(start)
+}
+
+// authoritative reports whether the snapshot is fresh enough to trust a
+// negative pane lookup without a per-target tmux exec.
+func (s *Snapshot) authoritative() bool {
+	return s != nil && time.Since(s.fetchedAt) < snapshotTTL
 }
 
 // HasPane reports whether target exists in the snapshot.

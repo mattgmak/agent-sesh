@@ -148,6 +148,17 @@ func renderListGutter(selected bool, status registry.Status) string {
 	return gutterStyleFor(status, selected).Render(strings.Repeat("▌", listGutterWidth))
 }
 
+var listEntryGapWidth = lipgloss.Width(listEntryGap)
+
+// previewPaneStyle holds the immutable part of the preview border. Only width
+// and height change per frame, so the style is built once.
+var previewPaneStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(lipgloss.ANSIColor(8)).
+	UnsetBackground().
+	UnsetBorderBackground().
+	Padding(previewPadding)
+
 func renderListFrame(
 	items []registry.Session,
 	cursor int,
@@ -185,9 +196,9 @@ func renderListFrame(
 		item := renderItems[i]
 		selected := opts.showCursor && i == localCursor
 
-		gutterWidth := lipgloss.Width(renderListGutter(selected, item.Status))
-		gapWidth := lipgloss.Width(listEntryGap)
-		bodyWidth := lineWidth - gutterWidth - gapWidth
+		gutter := renderListGutter(selected, item.Status)
+		gutterWidth := lipgloss.Width(gutter)
+		bodyWidth := lineWidth - gutterWidth - listEntryGapWidth
 		if bodyWidth < 1 {
 			bodyWidth = lineWidth
 		}
@@ -195,7 +206,7 @@ func renderListFrame(
 		entryLines := renderEntry(item, bodyWidth)
 		styled := make([]string, 0, len(entryLines))
 		for _, part := range entryLines {
-			line := renderListGutter(selected, item.Status) + listEntryGap + part
+			line := gutter + listEntryGap + part
 			styled = append(styled, line)
 		}
 		rowStarts[i] = len(allRows)
@@ -281,12 +292,7 @@ func renderPreviewPane(content string, cols, rows int, previewErr error, loading
 		body = clipLines(content, previewInnerWidth(cols), previewInnerHeight(rows))
 	}
 
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.ANSIColor(8)).
-		UnsetBackground().
-		UnsetBorderBackground().
-		Padding(previewPadding).
+	return previewPaneStyle.
 		Width(cols).
 		Height(rows).
 		Render(body)

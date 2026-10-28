@@ -3,11 +3,48 @@ package counts
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
 )
+
+func TestLoadAndCountUsesCachedSnapshot(t *testing.T) {
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	// No tmux on PATH: any exec attempt fails, so a passing count proves the
+	// persisted snapshot answered the run.
+	t.Setenv("PATH", t.TempDir())
+
+	regPath := filepath.Join(stateHome, "agent-sesh", "sessions.json")
+	now := time.Now().Format(time.RFC3339Nano)
+	sessions := []registry.Session{
+		{ID: "a", TmuxTarget: "%1", Agent: "pi", Status: registry.StatusWorking, UpdatedAt: now},
+		{ID: "b", TmuxTarget: "%2", Agent: "pi", Status: registry.StatusHalted, UpdatedAt: now},
+	}
+	if err := registry.Save(regPath, sessions); err != nil {
+		t.Fatal(err)
+	}
+
+	panes := `{"fetched_at":"` + time.Now().Format(time.RFC3339Nano) + `","panes":{
+		"%1":{"Target":"%1","Exists":true,"HasPiAgent":true},
+		"%2":{"Target":"%2","Exists":true,"HasPiAgent":true}}}`
+	if err := os.WriteFile(filepath.Join(stateHome, "agent-sesh", "pane-snapshot.json"), []byte(panes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := LoadAndCount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := registry.CategoryCounts{Attention: 1, Active: 1}
+	if got != want {
+		t.Fatalf("LoadAndCount() = %+v, want %+v", got, want)
+	}
+}
 
 func TestWriteDefaultFormat(t *testing.T) {
 	var buf bytes.Buffer

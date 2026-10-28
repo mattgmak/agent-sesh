@@ -2,9 +2,29 @@ package tmux
 
 import (
 	"testing"
+	"time"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
 )
+
+func TestPaneExistsCheckerFreshSnapshotAnswersMissingPane(t *testing.T) {
+	// Regression: a fresh snapshot must answer a missing pane from the cached
+	// pane list, not one tmux exec per dead row.
+	snap := &Snapshot{
+		panes:     map[string]PaneInfo{"%1": {Target: "%1", Exists: true}},
+		fetchedAt: time.Now(),
+	}
+	checker := paneExistsChecker(snap)
+	if !checker("%1") {
+		t.Fatal("expected %1 to exist")
+	}
+	if checker("%99") {
+		t.Fatal("expected %99 to be missing")
+	}
+	if checker("  ") {
+		t.Fatal("expected blank target to be missing")
+	}
+}
 
 func TestRegistrySanitizeOptionsDropsNonAgent(t *testing.T) {
 	sessions := []registry.Session{

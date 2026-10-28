@@ -9,6 +9,13 @@ import (
 // RegistrySanitizeOptions returns sanitize opts that drop missing panes and panes
 // without a live pi agent. Pass a snapshot when one is already available.
 func RegistrySanitizeOptions(snap *Snapshot) registry.SanitizeOptions {
+	if snap == nil {
+		// Warm one snapshot so every row is answered from it. Otherwise each
+		// dead row pays three tmux/ps execs in the live-probe fallbacks.
+		if fresh, err := GetSnapshot(true); err == nil {
+			snap = fresh
+		}
+	}
 	return registry.SanitizeOptions{
 		PaneExists: paneExistsChecker(snap),
 		HasAgent:   hasAgentChecker(snap),
@@ -21,8 +28,15 @@ func paneExistsChecker(snap *Snapshot) func(string) bool {
 		if target == "" {
 			return false
 		}
-		if snap != nil && snap.HasPane(target) {
-			return true
+		if snap != nil {
+			if snap.HasPane(target) {
+				return true
+			}
+			// A fresh snapshot is authoritative: a missing pane is dead, so no
+			// per-row tmux exec is needed to confirm it.
+			if snap.authoritative() {
+				return false
+			}
 		}
 		return PaneExists(target)
 	}

@@ -1,6 +1,9 @@
 package tmux
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -132,6 +135,123 @@ printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' '%1' 'work' '2' '3' '/dev/ttys999' 'zs
 	if piScanKey != oldPiScanKey || !piScanTTYs["old-tty"] || !piScanAt.Equal(oldPiScanAt) {
 		t.Fatalf("failed refresh changed pi scan cache: key=%q ttys=%v at=%v", piScanKey, piScanTTYs, piScanAt)
 	}
+}
+
+func TestRefreshSnapshotSingleFlight(t *testing.T) {
+	snapshotMu.Lock()
+	oldSnapshot := snapshotCache
+	snapshotMu.Unlock()
+	t.Cleanup(func() {
+		snapshotMu.Lock()
+		snapshotCache = oldSnapshot
+		snapshotMu.Unlock()
+	})
+
+	binDir := t.TempDir()
+	callLog := filepath.Join(t.TempDir(), "calls")
+	gate := filepath.Join(t.TempDir(), "gate")
+	t.Setenv("AGENT_SESH_TEST_CALL_LOG", callLog)
+	t.Setenv("AGENT_SESH_TEST_GATE", gate)
+	// The pane runs pi, so neither the tty scan nor the process tree scan runs.
+	writeFakeCommand(t, binDir, "tmux", `#!/bin/sh
+printf 'tmux\n' >> "$AGENT_SESH_TEST_CALL_LOG"
+while [ ! -f "$AGENT_SESH_TEST_GATE" ]; do :; done
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' '%1' 'work' '2' '3' '/dev/ttys999' 'pi' 'pi' '/tmp/project'
+`)
+	t.Setenv("PATH", binDir)
+
+	type result struct {
+		snap *Snapshot
+		err  error
+	}
+	results := make(chan result, 2)
+	go func() {
+		snap, err := refreshSnapshot()
+		results <- result{snap, err}
+	}()
+
+	waitForFile(t, callLog, 2*time.Second)
+	go func() {
+		snap, err := refreshSnapshot()
+		results <- result{snap, err}
+	}()
+	if err := os.WriteFile(gate, []byte("go\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 2; i++ {
+		select {
+		case res := <-results:
+			if res.err != nil {
+				t.Fatalf("refreshSnapshot() error = %v", res.err)
+			}
+			if !res.snap.HasPane("%1") {
+				t.Fatal("waiter did not share the in-flight snapshot")
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("refreshSnapshot() did not return")
+		}
+	}
+
+	data, err := os.ReadFile(callLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(data), "tmux"); got != 1 {
+		t.Fatalf("tmux exec calls = %d, want 1", got)
+	}
+}
+
+func TestSnapshotDiskCacheRoundTrip(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	snap := &Snapshot{
+		panes: map[string]PaneInfo{
+			"%1": {Target: "%1", TTY: "/dev/ttys004", ShellPID: 42, Exists: true, HasPiAgent: true},
+		},
+		fetchedAt: time.Now(),
+	}
+	if err := SaveSnapshot(snap); err != nil {
+		t.Fatal(err)
+	}
+	got, err := CachedSnapshot(10 * time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.HasPane("%1") || !got.HasPiAgent("%1") {
+		t.Fatalf("round trip lost pane: %+v", got)
+	}
+	if info, _ := got.PaneInfo("%1"); info.ShellPID != 42 || !got.authoritative() {
+		t.Fatalf("round trip lost fields: %+v", info)
+	}
+
+	if stale, err := CachedSnapshot(0); err != nil || stale != nil {
+		t.Fatalf("stale snapshot = (%v, %v), want (nil, nil)", stale, err)
+	}
+
+	InvalidateSnapshot()
+	if after, err := CachedSnapshot(time.Minute); err != nil || after != nil {
+		t.Fatalf("invalidated snapshot = (%v, %v), want (nil, nil)", after, err)
+	}
+}
+
+func TestCachedSnapshotMissingFile(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	got, err := CachedSnapshot(time.Minute)
+	if err != nil || got != nil {
+		t.Fatalf("missing file = (%v, %v), want (nil, nil)", got, err)
+	}
+}
+
+func waitForFile(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", path)
 }
 
 func TestCachedPiAgentTTYsReuse(t *testing.T) {

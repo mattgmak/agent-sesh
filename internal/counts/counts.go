@@ -5,10 +5,16 @@ import (
 	"fmt"
 	"io"
 	"text/template"
+	"time"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
 	"github.com/mattgmak/agent-sesh/internal/tmux"
 )
+
+// snapshotMaxAge mirrors the tmux pane snapshot TTL. A status line that
+// refreshes every second must not pay tmux/ps execs on each tick, so a
+// persisted snapshot this young answers the whole run.
+const snapshotMaxAge = 10 * time.Second
 
 // Nerd Font icons — same codepoints as the picker status display.
 const (
@@ -46,8 +52,22 @@ func LoadAndCount() (registry.CategoryCounts, error) {
 	if err != nil {
 		return registry.CategoryCounts{}, err
 	}
-	sanitized, _ := registry.Sanitize(sessions, tmux.RegistrySanitizeOptions(nil))
+	sanitized, _ := registry.Sanitize(sessions, tmux.RegistrySanitizeOptions(paneSnapshot()))
 	return registry.CountByCategory(sanitized), nil
+}
+
+// paneSnapshot reuses the persisted pane snapshot while it is fresh and
+// refreshes it only when it ages out. Nil leaves the sanitize opts to warm it.
+func paneSnapshot() *tmux.Snapshot {
+	if snap, err := tmux.CachedSnapshot(snapshotMaxAge); err == nil && snap != nil {
+		return snap
+	}
+	snap, err := tmux.GetSnapshot(true)
+	if err != nil || snap == nil {
+		return nil
+	}
+	_ = tmux.SaveSnapshot(snap)
+	return snap
 }
 
 func templateData(counts registry.CategoryCounts) TemplateData {
