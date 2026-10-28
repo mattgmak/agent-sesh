@@ -55,7 +55,8 @@ func previewTestModel(t *testing.T) model {
 }
 
 func TestPreviewContentKeyTracksBytes(t *testing.T) {
-	if previewContentKey("pane body") != previewContentKey("pane body") {
+	sameBytes := "pane " + "body"
+	if previewContentKey("pane body") != previewContentKey(sameBytes) {
 		t.Fatal("identical captures must share a key")
 	}
 	if previewContentKey("pane body") == previewContentKey("pane body ") {

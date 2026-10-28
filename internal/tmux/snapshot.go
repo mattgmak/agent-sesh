@@ -2,6 +2,7 @@ package tmux
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -225,9 +226,11 @@ func SaveSnapshot(snap *Snapshot) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }() // best effort: a successful rename already consumed the file
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		if cerr := tmp.Close(); cerr != nil {
+			return errors.Join(err, cerr)
+		}
 		return err
 	}
 	if err := tmp.Close(); err != nil {
