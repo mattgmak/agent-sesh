@@ -27,8 +27,12 @@ const (
 	discoveryRefreshInterval   = 30 * time.Second
 	previewMinRefreshInterval  = 1200 * time.Millisecond
 	previewNavigateDebounce    = 200 * time.Millisecond
-	previewLiveRefreshInterval = 2 * time.Second
+	previewLiveRefreshInterval = 500 * time.Millisecond
+	previewBusyRefreshInterval = 100 * time.Millisecond
 )
+
+// capturePane is a test seam for the tmux capture call.
+var capturePane = tmux.CapturePane
 
 // Nerd Font codepoints (MDI from bin/scripts/lib/i_md.sh, FA from i_fa.sh).
 const (
@@ -66,7 +70,6 @@ type previewRefreshMsg struct {
 	seq    int
 	id     string
 	target string
-	rev    string
 }
 
 type previewLiveTickMsg struct{}
@@ -85,12 +88,11 @@ type registryReloadedMsg struct {
 }
 
 type previewLoadedMsg struct {
-	seq      int
-	id       string
-	target   string
-	revision string
-	content  string
-	err      error
+	seq     int
+	id      string
+	target  string
+	content string
+	err     error
 }
 
 type sessionsLoadedMsg struct {
@@ -125,7 +127,7 @@ type model struct {
 	previewPending          string
 	previewName             string
 	previewTarget           string
-	previewRevision         string
+	previewKey              uint64
 	previewSeq              int
 	loading                 bool
 	registryMtime           time.Time
@@ -219,14 +221,23 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		scheduleRegistryRefresh(),
 		scheduleDiscoveryRefresh(),
-		schedulePreviewLiveRefresh(),
+		(&m).schedulePreviewLiveRefresh(),
 		m.loadSessionsAsync(),
 		m.schedulePreview(),
 	)
 }
 
-func schedulePreviewLiveRefresh() tea.Cmd {
-	return tea.Tick(previewLiveRefreshInterval, func(time.Time) tea.Msg {
+// previewRefreshInterval picks the live poll cadence. A pending capture or a
+// key burst gets the fast tick. A quiet picker gets the busy-pane tick.
+func (m model) previewRefreshInterval() time.Duration {
+	if m.previewPending != "" {
+		return previewBusyRefreshInterval
+	}
+	return previewLiveRefreshInterval
+}
+
+func (m *model) schedulePreviewLiveRefresh() tea.Cmd {
+	return tea.Tick(m.previewRefreshInterval(), func(time.Time) tea.Msg {
 		return previewLiveTickMsg{}
 	})
 }
@@ -422,147 +433,116 @@ func (m *model) schedulePreviewNavigate() tea.Cmd {
 
 func (m *model) schedulePreviewOpts(mode previewScheduleMode) tea.Cmd {
 	if !m.splitActive() {
-		m.previewSeq++
-		m.previewName, m.previewTarget, m.previewPending, m.previewContent, m.previewErr, m.previewRevision = "", "", "", "", nil, ""
-		return nil
-	}
-
-	session, ok := m.selected()
-	if !ok {
-		m.previewSeq++
-		m.previewName, m.previewTarget, m.previewPending, m.previewContent, m.previewErr, m.previewRevision = "", "", "", "", nil, ""
-		return nil
-	}
-
-	id := session.ID
-	target := strings.TrimSpace(session.TmuxTarget)
-	rev := previewRevision(session)
-	if target == m.previewTarget && rev == m.previewRevision && m.previewPending == "" {
-		return nil
-	}
-	if target != "" && m.previewPending == target {
-		return nil
-	}
-
-	if content, err, hit := getPreviewCache(target, rev); hit {
-		profileNote("schedulePreview", "cache hit "+target)
-		if target != m.previewTarget {
-			// Invalidate in-flight captures for the previous pane (same tmux
-			// window, different pane is a common case).
-			m.previewSeq++
-		}
-		m.previewName = id
-		m.previewTarget = target
-		m.previewRevision = rev
-		m.previewContent = content
-		m.previewErr = err
-		m.previewPending = ""
-		return nil
-	}
-
-	staleContent, _, staleHit, staleErr := getPreviewCacheAny(target)
-	switchingPane := target != m.previewTarget
-
-	if mode == previewScheduleNavigate {
-		if switchingPane {
-			m.previewSeq++
-		}
-		m.previewName = id
-		m.previewTarget = target
-		m.previewRevision = rev
-		if staleHit {
-			m.previewContent = staleContent
-			m.previewErr = staleErr
-		} else {
-			m.previewContent = ""
-			m.previewErr = nil
-		}
-		if m.previewPending == target {
-			return nil
-		}
-		// No cached pane text → fetch now so we don't show the previous pane.
-		if !staleHit {
-			m.previewSeq++
-			m.previewPending = target
-			seq := m.previewSeq
-			m.previewLastFetch = time.Now()
-			return m.fetchPreview(seq, id, target, rev)
-		}
-		m.previewSeq++
-		seq := m.previewSeq
-		m.previewPending = target
-		profileNote("schedulePreview", "deferred navigate "+target)
-		return tea.Tick(previewNavigateDebounce, func(time.Time) tea.Msg {
-			return previewRefreshMsg{seq: seq, id: id, target: target, rev: rev}
-		})
-	}
-
-	if staleHit {
-		m.previewName = id
-		m.previewTarget = target
-		m.previewContent = staleContent
-		m.previewErr = staleErr
-	}
-
-	immediate := mode == previewScheduleImmediate
-	if !immediate && target == m.previewTarget && m.previewContent != "" {
-		if elapsed := time.Since(m.previewLastFetch); elapsed < previewMinRefreshInterval {
-			if m.previewPending == target {
-				return nil
-			}
-			wait := previewMinRefreshInterval - elapsed
-			m.previewSeq++
-			seq := m.previewSeq
-			m.previewPending = target
-			return tea.Tick(wait, func(time.Time) tea.Msg {
-				return previewRefreshMsg{seq: seq, id: id, target: target, rev: rev}
-			})
-		}
-	}
-
-	m.previewSeq++
-	m.previewPending = target
-	seq := m.previewSeq
-	m.previewLastFetch = time.Now()
-	return m.fetchPreview(seq, id, target, rev)
-}
-
-func (m *model) forcePreviewRefresh() tea.Cmd {
-	if !m.splitActive() {
+		m.resetPreview()
 		return nil
 	}
 	session, ok := m.selected()
 	if !ok {
+		m.resetPreview()
 		return nil
 	}
 	id := session.ID
 	target := strings.TrimSpace(session.TmuxTarget)
 	if target == "" {
+		m.resetPreview()
 		return nil
 	}
-	if m.previewPending == target {
+
+	// A pane switch shows that pane's last capture at once. The capture after
+	// it always runs: pane text changes while the agent status stays the same.
+	switched := target != m.previewTarget
+	if switched {
+		m.adoptCachedPreview(id, target)
+	}
+	// One capture at a time. A pending capture drops the queued one, so a key
+	// burst never starts a second tmux call.
+	if m.previewPending != "" {
+		return nil
+	}
+
+	switch {
+	case switched && mode == previewScheduleNavigate && m.previewContent != "":
+		return m.deferPreviewFetch(id, target)
+	case switched:
+		return m.startPreviewFetch(id, target)
+	case mode == previewScheduleNavigate:
+		return nil
+	case mode == previewScheduleImmediate:
+		return m.startPreviewFetch(id, target)
+	case time.Since(m.previewLastFetch) < previewMinRefreshInterval:
+		return m.deferPreviewFetch(id, target)
+	default:
+		return m.startPreviewFetch(id, target)
+	}
+}
+
+// resetPreview clears the preview pane and drops the capture in flight.
+func (m *model) resetPreview() {
+	m.previewSeq++
+	m.previewName, m.previewTarget, m.previewPending = "", "", ""
+	m.previewContent, m.previewErr, m.previewKey = "", nil, 0
+}
+
+// adoptCachedPreview shows the stored capture of target and drops captures in
+// flight for the previous pane.
+func (m *model) adoptCachedPreview(id, target string) {
+	content, key, ok := cachedPreview(target)
+	if !ok {
+		content, key = "", 0
+	}
+	m.previewSeq++
+	m.previewName, m.previewTarget = id, target
+	m.previewContent, m.previewErr, m.previewKey = content, nil, key
+}
+
+func (m *model) startPreviewFetch(id, target string) tea.Cmd {
+	m.previewSeq++
+	m.previewPending = target
+	m.previewLastFetch = time.Now()
+	seq := m.previewSeq
+	return m.fetchPreview(seq, id, target)
+}
+
+// deferPreviewFetch waits out the navigate debounce, then captures once.
+func (m *model) deferPreviewFetch(id, target string) tea.Cmd {
+	m.previewSeq++
+	m.previewPending = target
+	seq := m.previewSeq
+	profileNote("schedulePreview", "deferred "+target)
+	return tea.Tick(previewNavigateDebounce, func(time.Time) tea.Msg {
+		return previewRefreshMsg{seq: seq, id: id, target: target}
+	})
+}
+
+func (m *model) forcePreviewRefresh() tea.Cmd {
+	if !m.splitActive() || m.previewPending != "" {
+		return nil
+	}
+	session, ok := m.selected()
+	if !ok {
+		return nil
+	}
+	target := strings.TrimSpace(session.TmuxTarget)
+	if target == "" {
 		return nil
 	}
 	if time.Since(m.previewLastFetch) < previewLiveRefreshInterval {
 		return nil
 	}
-	rev := previewRevision(session)
-	m.previewSeq++
-	m.previewPending = target
-	seq := m.previewSeq
-	m.previewLastFetch = time.Now()
-	return m.fetchPreview(seq, id, target, rev)
+	return m.startPreviewFetch(session.ID, target)
 }
 
-func (m model) fetchPreview(seq int, id, target, revision string) tea.Cmd {
+func (m model) fetchPreview(seq int, id, target string) tea.Cmd {
 	return func() tea.Msg {
 		defer profileStart("fetchPreview " + target)()
 		if target == "" {
-			return previewLoadedMsg{seq: seq, id: id, target: target, revision: revision, content: "", err: nil}
+			return previewLoadedMsg{seq: seq, id: id, target: target}
 		}
-		content, err := tmux.CapturePane(target, 0)
-		setPreviewCache(target, revision, content, err)
-		return previewLoadedMsg{seq: seq, id: id, target: target, revision: revision, content: content, err: err}
+		content, err := capturePane(target, 0)
+		if err == nil {
+			storePreviewCapture(target, content)
+		}
+		return previewLoadedMsg{seq: seq, id: id, target: target, content: content, err: err}
 	}
 }
 
@@ -644,38 +624,44 @@ func (m model) syncInputWidth() {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case previewLoadedMsg:
+		// Clear the pending slot for the captured pane even when the capture
+		// is stale, else a dropped capture blocks every later one.
+		if msg.target != "" && msg.target == m.previewPending {
+			m.previewPending = ""
+		}
 		if msg.seq != m.previewSeq {
+			if m.previewPending == "" {
+				return m, (&m).schedulePreview()
+			}
 			return m, nil
 		}
 		session, ok := m.selected()
-		if !ok || session.TmuxTarget != msg.target {
+		if !ok || strings.TrimSpace(session.TmuxTarget) != msg.target {
 			return m, nil
 		}
-		if msg.target == m.previewTarget && msg.revision == m.previewRevision && msg.content == m.previewContent && msg.err == m.previewErr {
-			m.previewPending = ""
+		key := previewContentKey(msg.content)
+		if msg.err == nil && msg.target == m.previewTarget && key == m.previewKey && msg.err == m.previewErr {
+			// Same bytes: the cached render stays valid.
 			return m, nil
 		}
-		m.previewPending = ""
 		m.previewName = msg.id
 		m.previewTarget = msg.target
-		m.previewRevision = msg.revision
 		m.previewContent = msg.content
 		m.previewErr = msg.err
+		m.previewKey = key
 		return m, nil
 
 	case previewRefreshMsg:
+		if msg.target != "" && msg.target == m.previewPending {
+			m.previewPending = ""
+		}
 		if msg.seq != m.previewSeq {
 			return m, nil
 		}
 		session, ok := m.selected()
-		if !ok || session.TmuxTarget != msg.target {
-			return m, nil
+		if !ok || strings.TrimSpace(session.TmuxTarget) != msg.target {
+			return m, (&m).schedulePreview()
 		}
-		if previewRevision(session) != msg.rev {
-			m.previewPending = ""
-			return m, (&m).schedulePreviewOpts(previewScheduleImmediate)
-		}
-		m.previewPending = ""
 		return m, (&m).schedulePreviewOpts(previewScheduleImmediate)
 
 	case registryReloadMsg:
@@ -708,36 +694,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if info, err := os.Stat(m.registry); err == nil {
 			m.registryMtime = info.ModTime()
 		}
-		oldRev := ""
-		if session, ok := m.selected(); ok {
-			oldRev = previewRevision(session)
-		}
 		prevKey := m.sessionsRenderKey
 		if !m.applySessionsIfChanged(msg.sessions) {
 			profileNote("reload", "noop")
 			return m, nil
 		}
 		m.reconcileCursor()
-		if session, ok := m.selected(); ok && m.sessionsRenderKey != prevKey && previewRevision(session) != oldRev {
+		if m.sessionsRenderKey != prevKey {
 			return m, m.schedulePreview()
 		}
 		return m, nil
 
 	case previewLiveTickMsg:
-		cmd := schedulePreviewLiveRefresh()
-		if !m.splitActive() {
-			return m, cmd
+		var refresh tea.Cmd
+		if m.splitActive() {
+			if session, ok := m.selected(); ok {
+				switch session.Status {
+				case registry.StatusWorking, registry.StatusToolCall:
+					refresh = (&m).forcePreviewRefresh()
+				}
+			}
 		}
-		session, ok := m.selected()
-		if !ok {
-			return m, cmd
-		}
-		switch session.Status {
-		case registry.StatusWorking, registry.StatusToolCall:
-			return m, tea.Batch(cmd, (&m).forcePreviewRefresh())
-		default:
-			return m, cmd
-		}
+		return m, tea.Batch((&m).schedulePreviewLiveRefresh(), refresh)
 
 	case sessionsLoadedMsg:
 		if msg.err != nil {

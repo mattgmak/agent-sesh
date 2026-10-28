@@ -3,90 +3,231 @@ package picker
 import (
 	"context"
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
 )
 
-func TestPreviewCacheRoundTrip(t *testing.T) {
-	target := "%test-preview-cache"
-	rev := "working\x00Shell\x002026-01-01T00:00:00Z"
-	invalidatePreviewCache(target)
-
-	if _, _, ok := getPreviewCache(target, rev); ok {
-		t.Fatal("expected empty cache")
+// stubCapture replaces the tmux capture with a scripted sequence of pane text.
+func stubCapture(t *testing.T, contents ...string) *int {
+	t.Helper()
+	calls := new(int)
+	prev := capturePane
+	capturePane = func(string, int) (string, error) {
+		i := *calls
+		if i >= len(contents) {
+			i = len(contents) - 1
+		}
+		*calls++
+		return contents[i], nil
 	}
-
-	setPreviewCache(target, rev, "hello", nil)
-	content, err, ok := getPreviewCache(target, rev)
-	if !ok || content != "hello" || err != nil {
-		t.Fatalf("cache miss: ok=%v content=%q err=%v", ok, content, err)
-	}
+	t.Cleanup(func() { capturePane = prev })
+	return calls
 }
 
-func TestPreviewCacheDoesNotStoreCaptureError(t *testing.T) {
-	target := "%test-preview-error"
-	rev := "working\x00Shell"
-	invalidatePreviewCache(target)
-	t.Cleanup(func() { invalidatePreviewCache(target) })
-
-	if _, _, ok, _ := getPreviewCacheAny(target); ok {
-		t.Fatal("expected empty cache")
+func runPreviewCmd(t *testing.T, m *model, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		t.Fatal("expected a capture command")
 	}
-	setPreviewCache(target, rev, "", context.DeadlineExceeded)
-	if _, _, ok, _ := getPreviewCacheAny(target); ok {
-		t.Fatal("capture error was stored in preview cache")
-	}
-
-	setPreviewCache(target, rev, "good preview", nil)
-	setPreviewCache(target, rev, "", context.DeadlineExceeded)
-	content, err, ok := getPreviewCache(target, rev)
-	if !ok || content != "good preview" || err != nil {
-		t.Fatalf("capture error replaced good cache entry: ok=%v content=%q err=%v", ok, content, err)
-	}
+	updated, _ := m.Update(cmd())
+	*m = updated.(model)
 }
 
-func TestPreviewCacheRevisionMismatch(t *testing.T) {
-	target := "%test-preview-rev"
-	invalidatePreviewCache(target)
-
-	setPreviewCache(target, "idle\x00\x00", "old", nil)
-	if _, _, ok := getPreviewCache(target, "working\x00Shell\x00"); ok {
-		t.Fatal("expected revision mismatch to miss cache")
+func previewTestModel(t *testing.T) model {
+	t.Helper()
+	sessions := sampleSessions()
+	for _, s := range sessions {
+		invalidatePreviewCache(s.TmuxTarget)
 	}
-}
-
-func TestPreviewRevision(t *testing.T) {
-	session := registry.Session{
-		Status:       registry.StatusToolCall,
-		ToolName:     "Read",
-		LastPromptAt: "2026-01-02T12:00:00Z",
-	}
-	got := previewRevision(session)
-	want := string(registry.StatusToolCall) + "\x00Read"
-	if got != want {
-		t.Fatalf("previewRevision() = %q, want %q", got, want)
-	}
-}
-
-func TestSchedulePreviewUsesCacheWithoutFetch(t *testing.T) {
-	m := testModel(sampleSessions())
+	t.Cleanup(func() {
+		for _, s := range sessions {
+			invalidatePreviewCache(s.TmuxTarget)
+		}
+	})
+	m := testModel(sessions)
 	m.width = 120
 	m.height = 24
 	m.syncInputWidth()
+	return m
+}
 
-	session := sampleSessions()[0]
-	rev := previewRevision(session)
-	setPreviewCache(session.TmuxTarget, rev, "cached pane", nil)
+func TestPreviewContentKeyTracksBytes(t *testing.T) {
+	if previewContentKey("pane body") != previewContentKey("pane body") {
+		t.Fatal("identical captures must share a key")
+	}
+	if previewContentKey("pane body") == previewContentKey("pane body ") {
+		t.Fatal("new bytes must get a new key")
+	}
+}
+
+func TestPreviewCacheKeepsOneTarget(t *testing.T) {
+	invalidatePreviewCache("%test-cache-a")
+	invalidatePreviewCache("%test-cache-b")
+	t.Cleanup(func() {
+		invalidatePreviewCache("%test-cache-a")
+		invalidatePreviewCache("%test-cache-b")
+	})
+
+	storePreviewCapture("%test-cache-a", "pane a")
+	if content, key, ok := cachedPreview("%test-cache-a"); !ok || content != "pane a" || key != previewContentKey("pane a") {
+		t.Fatalf("cache miss: ok=%v content=%q key=%d", ok, content, key)
+	}
+
+	storePreviewCapture("%test-cache-b", "pane b")
+	if _, _, ok := cachedPreview("%test-cache-a"); ok {
+		t.Fatal("cache must keep only the current target")
+	}
+	if content, _, ok := cachedPreview("%test-cache-b"); !ok || content != "pane b" {
+		t.Fatalf("cache lost the current target: ok=%v content=%q", ok, content)
+	}
+}
+
+func TestPreviewCacheServesIdenticalCapture(t *testing.T) {
+	calls := stubCapture(t, "pane v1", "pane v1", "pane v2")
+	m := previewTestModel(t)
+
+	runPreviewCmd(t, &m, (&m).schedulePreview())
+	if m.previewContent != "pane v1" {
+		t.Fatalf("first capture = %q", m.previewContent)
+	}
+	key := m.previewKey
+	if key != previewContentKey("pane v1") {
+		t.Fatalf("previewKey = %d, want the capture hash", key)
+	}
+
+	// Second capture returns the same bytes: the cached render still serves.
+	m.previewLastFetch = time.Time{}
+	cached, cachedKey, ok := cachedPreview(m.sessions[0].TmuxTarget)
+	if !ok || cachedKey != key {
+		t.Fatalf("cache entry = key=%d ok=%v, want key=%d", cachedKey, ok, key)
+	}
+	runPreviewCmd(t, &m, (&m).schedulePreview())
+	if *calls != 2 {
+		t.Fatalf("capture calls = %d, want 2", *calls)
+	}
+	if m.previewKey != key || m.previewContent != cached {
+		t.Fatalf("identical capture changed preview state: key=%d content=%q", m.previewKey, m.previewContent)
+	}
+
+	// Third capture returns new bytes: the cached render is invalidated.
+	m.previewLastFetch = time.Time{}
+	runPreviewCmd(t, &m, (&m).schedulePreview())
+	if m.previewContent != "pane v2" {
+		t.Fatalf("previewContent = %q, want the new bytes", m.previewContent)
+	}
+	if m.previewKey == key {
+		t.Fatal("new bytes kept the old content key")
+	}
+}
+
+func TestBusyPaneRefetchesWhileStatusIsUnchanged(t *testing.T) {
+	// Status and tool name stay "working" between both polls. The old
+	// Status+ToolName key froze the preview here.
+	calls := stubCapture(t, "spinner frame 1", "spinner frame 2")
+	m := previewTestModel(t)
+
+	runPreviewCmd(t, &m, (&m).schedulePreview())
+	if m.previewContent != "spinner frame 1" {
+		t.Fatalf("first capture = %q", m.previewContent)
+	}
+	if m.sessions[0].Status != registry.StatusWorking || m.sessions[0].ToolName != "" {
+		t.Fatalf("test needs an unchanged working session, got %+v", m.sessions[0])
+	}
+
+	m.previewLastFetch = time.Time{}
+	cmd := (&m).schedulePreview()
+	if cmd == nil {
+		t.Fatal("busy pane froze: no capture after an unchanged status")
+	}
+	runPreviewCmd(t, &m, cmd)
+	if m.previewContent != "spinner frame 2" {
+		t.Fatalf("previewContent = %q, want the second frame", m.previewContent)
+	}
+	if *calls != 2 {
+		t.Fatalf("capture calls = %d, want 2", *calls)
+	}
+}
+
+func TestSchedulePreviewRunsOneCaptureAtATime(t *testing.T) {
+	stubCapture(t, "pane body")
+	m := previewTestModel(t)
 
 	cmd := (&m).schedulePreview()
-	if cmd != nil {
-		t.Fatal("expected cache hit to skip tmux fetch command")
+	if cmd == nil {
+		t.Fatal("expected a capture command")
 	}
-	if m.previewContent != "cached pane" {
-		t.Fatalf("expected cached preview, got %q", m.previewContent)
+	if second := (&m).schedulePreview(); second != nil {
+		t.Fatal("second capture queued while one was in flight")
 	}
-	if m.previewRevision != rev {
-		t.Fatalf("expected revision %q, got %q", rev, m.previewRevision)
+	if second := (&m).schedulePreviewNavigate(); second != nil {
+		t.Fatal("navigate capture queued while one was in flight")
+	}
+}
+
+func TestStaleCaptureReleasesPendingSlot(t *testing.T) {
+	stubCapture(t, "pane one", "pane two")
+	m := previewTestModel(t)
+
+	if cmd := (&m).schedulePreview(); cmd == nil {
+		t.Fatal("expected the first capture")
+	}
+	staleSeq := m.previewSeq
+
+	// The user moves to the second pane while the first capture is in flight.
+	m = m.setCursor(1)
+	if cmd := (&m).schedulePreview(); cmd != nil {
+		t.Fatal("queued a second capture while one was in flight")
+	}
+
+	updated, cmd := m.Update(previewLoadedMsg{
+		seq:     staleSeq,
+		id:      m.sessions[0].ID,
+		target:  m.sessions[0].TmuxTarget,
+		content: "pane one",
+	})
+	got := updated.(model)
+	if cmd == nil {
+		t.Fatal("stale capture left the preview stuck")
+	}
+	if got.previewPending != m.sessions[1].TmuxTarget {
+		t.Fatalf("previewPending = %q, want %q", got.previewPending, m.sessions[1].TmuxTarget)
+	}
+}
+
+func TestPreviewLiveRefreshCadence(t *testing.T) {
+	if previewLiveRefreshInterval != 500*time.Millisecond {
+		t.Fatalf("live interval = %v, want 500ms", previewLiveRefreshInterval)
+	}
+	if previewBusyRefreshInterval != 100*time.Millisecond {
+		t.Fatalf("busy interval = %v, want 100ms", previewBusyRefreshInterval)
+	}
+
+	m := previewTestModel(t)
+	if got := m.previewRefreshInterval(); got != previewLiveRefreshInterval {
+		t.Fatalf("idle cadence = %v, want %v", got, previewLiveRefreshInterval)
+	}
+	m.previewPending = m.sessions[0].TmuxTarget
+	if got := m.previewRefreshInterval(); got != previewBusyRefreshInterval {
+		t.Fatalf("busy cadence = %v, want %v", got, previewBusyRefreshInterval)
+	}
+}
+
+func TestPreviewCacheSkipsStoreOnCaptureError(t *testing.T) {
+	target := "%test-preview-error"
+	invalidatePreviewCache(target)
+	t.Cleanup(func() { invalidatePreviewCache(target) })
+
+	prev := capturePane
+	capturePane = func(string, int) (string, error) { return "", context.DeadlineExceeded }
+	t.Cleanup(func() { capturePane = prev })
+
+	m := previewTestModel(t)
+	runPreviewCmd(t, &m, (&m).fetchPreview(1, m.sessions[0].ID, target))
+	if _, _, ok := cachedPreview(target); ok {
+		t.Fatal("capture error was stored in the preview cache")
 	}
 }
 

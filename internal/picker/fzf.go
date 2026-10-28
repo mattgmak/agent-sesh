@@ -40,33 +40,18 @@ func Preview(w io.Writer, key string) error {
 	}
 
 	key = strings.TrimSpace(key)
-	var session registry.Session
-	var found bool
+	target := key
 	for _, s := range sessions {
 		if s.ID == key || s.TmuxTarget == key || s.Title == key {
-			session = s
-			found = true
+			target = s.TmuxTarget
 			break
 		}
 	}
-	target := key
-	revision := ""
-	if found {
-		target = session.TmuxTarget
-		revision = previewRevision(session)
-	}
-	if revision != "" {
-		if content, _, ok := getPreviewCache(target, revision); ok {
-			_, err = io.WriteString(w, content)
-			return err
-		}
-	}
+	// fzf runs one process per preview call, so a process-local cache cannot
+	// hit here. Capture every time and let the caller see live pane text.
 	content, err := tmux.CapturePane(target, 0)
 	if err != nil {
 		return err
-	}
-	if revision != "" {
-		setPreviewCache(target, revision, content, nil)
 	}
 	_, err = io.WriteString(w, content)
 	return err

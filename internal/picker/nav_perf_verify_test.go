@@ -39,7 +39,7 @@ func benchModel(n int, status registry.Status) model {
 	m.syncInputWidth()
 	m.previewTarget = "%1"
 	m.previewContent = stringsRepeatLine(40)
-	m.previewRevision = previewRevision(m.sessions[0])
+	m.previewKey = previewContentKey(m.previewContent)
 	return m
 }
 

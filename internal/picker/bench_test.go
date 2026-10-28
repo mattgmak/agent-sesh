@@ -73,7 +73,7 @@ func benchPickerModel() model {
 		previewTarget:  sessions[0].TmuxTarget,
 		previewContent: benchPreviewText(60),
 	}
-	m.previewRevision = previewRevision(sessions[0])
+	m.previewKey = previewContentKey(m.previewContent)
 	m.syncInputWidth()
 	return m
 }

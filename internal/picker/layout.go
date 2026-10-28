@@ -159,6 +159,13 @@ var previewPaneStyle = lipgloss.NewStyle().
 	UnsetBorderBackground().
 	Padding(previewPadding)
 
+const (
+	memoTagClip uint8 = iota
+	memoTagPaneBody
+	memoTagPaneLoading
+	memoTagPaneError
+)
+
 func renderListFrame(
 	items []registry.Session,
 	cursor int,
@@ -259,26 +266,26 @@ func renderListFrame(
 	return strings.Join(lines, "\n")
 }
 
-func clipLines(text string, width, rows int) string {
-	if width < 1 || rows < 1 {
-		return ""
+func renderPreviewPane(content string, cols, rows int, previewErr error, loading bool) string {
+	tag, aux := memoTagPaneBody, ""
+	switch {
+	case previewErr != nil:
+		tag, aux = memoTagPaneError, previewErr.Error()
+	case loading:
+		tag = memoTagPaneLoading
 	}
 
-	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	if len(lines) > rows {
-		// Keep the tail (bottom) of the capture so the preview shows the
-		// agent TUI's full interface — status bar, tool output, input —
-		// from the bottom-most content upward.
-		lines = lines[len(lines)-rows:]
+	dims := memoDims{width: cols, height: rows}
+	key := memoKey(content, dims, tag, aux)
+	if out, ok := paneMemo.get(content, aux, key, dims, tag); ok {
+		return out
 	}
-
-	for i, line := range lines {
-		lines[i] = ensureResetSuffix(truncateANSI(line, width))
-	}
-	return strings.Join(lines, "\n")
+	out := renderPreviewPaneUncached(content, cols, rows, previewErr, loading)
+	paneMemo.put(content, aux, key, dims, tag, out)
+	return out
 }
 
-func renderPreviewPane(content string, cols, rows int, previewErr error, loading bool) string {
+func renderPreviewPaneUncached(content string, cols, rows int, previewErr error, loading bool) string {
 	faint := faintStyle
 	var body string
 	switch {
