@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
 )
@@ -231,5 +233,110 @@ func TestRenderListGutterSelected(t *testing.T) {
 	// Selected gutter has green background.
 	if got := renderListGutter(true, registry.StatusWorking); got == "" || got == " " {
 		t.Fatalf("active gutter should render marker, got %q", got)
+	}
+}
+
+func TestBuildMetaChunksSubagentCount(t *testing.T) {
+	compat.Profile = colorprofile.ANSI256
+	t.Cleanup(func() { compat.Profile = colorprofile.Ascii })
+
+	session := registry.Session{TmuxSession: "demo", Status: registry.StatusIdle, Agent: "pi", SubagentsRunning: 3}
+
+	chunks := buildMetaChunks(session)
+	var countChunk *metaChunk
+	for i, chunk := range chunks {
+		if chunk.icon == iconSubagentsRunning {
+			countChunk = &chunks[i]
+			break
+		}
+	}
+	if countChunk == nil {
+		t.Fatalf("expected subagent count chunk, got %+v", chunks)
+	}
+	if countChunk.text != "3" {
+		t.Fatalf("count text = %q, want 3", countChunk.text)
+	}
+	if got, want := countChunk.style.Render("x"), subagentCountStyle.Render("x"); got != want {
+		t.Fatalf("count style = %q, want magenta count style %q", got, want)
+	}
+
+	line := formatSessionEntry(session, 80)[0]
+	// Status resolves to subagents_running via DisplayStatus, so the glyph shows twice.
+	if strings.Count(line, iconSubagentsRunning) != 2 {
+		t.Fatalf("expected status and count glyphs, got %q", line)
+	}
+	if !strings.Contains(line, subagentCountStyle.Render(iconSubagentsRunning+" 3")) {
+		t.Fatalf("expected styled subagent count %q in %q", iconSubagentsRunning+" 3", line)
+	}
+}
+
+func TestBuildMetaChunksBgJobCount(t *testing.T) {
+	compat.Profile = colorprofile.ANSI256
+	t.Cleanup(func() { compat.Profile = colorprofile.Ascii })
+
+	session := registry.Session{TmuxSession: "demo", Status: registry.StatusIdle, Agent: "pi", BgJobsRunning: 2}
+	line := formatSessionEntry(session, 80)[0]
+	if !strings.Contains(line, bgJobCountStyle.Render(iconBgJobsRunning+" 2")) {
+		t.Fatalf("expected styled bg job count %q in %q", iconBgJobsRunning+" 2", line)
+	}
+	if strings.Contains(line, iconSubagentsRunning) {
+		t.Fatalf("unexpected subagent count glyph in %q", line)
+	}
+}
+
+func TestBuildMetaChunksCountsRenderWhileWorking(t *testing.T) {
+	compat.Profile = colorprofile.ANSI256
+	t.Cleanup(func() { compat.Profile = colorprofile.Ascii })
+
+	session := registry.Session{
+		TmuxSession:      "demo",
+		Status:           registry.StatusWorking,
+		Agent:            "pi",
+		SubagentsRunning: 1,
+		BgJobsRunning:    2,
+	}
+	line := formatSessionEntry(session, 120)[0]
+	if !strings.Contains(line, iconWorking) {
+		t.Fatalf("expected working status icon in %q", line)
+	}
+	if !strings.Contains(line, iconSubagentsRunning+" 1") || !strings.Contains(line, iconBgJobsRunning+" 2") {
+		t.Fatalf("counts must render while working, got %q", line)
+	}
+	if !strings.Contains(line, subagentCountStyle.Render(iconSubagentsRunning+" 1")) {
+		t.Fatalf("expected magenta subagent count in %q", line)
+	}
+	if !strings.Contains(line, bgJobCountStyle.Render(iconBgJobsRunning+" 2")) {
+		t.Fatalf("expected blue bg job count in %q", line)
+	}
+}
+
+func TestBuildMetaChunksZeroCountersAddNoChunks(t *testing.T) {
+	session := registry.Session{TmuxSession: "demo", Status: registry.StatusIdle, Agent: "pi"}
+	for _, chunk := range buildMetaChunks(session) {
+		if chunk.icon == iconSubagentsRunning || chunk.icon == iconBgJobsRunning {
+			t.Fatalf("unexpected count chunk with zero counters: %+v", chunk)
+		}
+	}
+}
+
+func TestRenderListGutterUsesResolvedStatus(t *testing.T) {
+	compat.Profile = colorprofile.ANSI256
+	t.Cleanup(func() { compat.Profile = colorprofile.Ascii })
+
+	items := []registry.Session{{
+		ID:               "halted-busy",
+		TmuxTarget:       "%1",
+		TmuxSession:      "demo",
+		Agent:            "pi",
+		Status:           registry.StatusHalted,
+		SubagentsRunning: 1,
+	}}
+	out := renderListFrame(items, 0, 1, 58, listRenderOpts{}, formatSessionEntry)
+
+	if green := renderListGutter(false, registry.StatusSubagentsRunning); !strings.Contains(out, green) {
+		t.Fatalf("expected green gutter %q in %q", green, out)
+	}
+	if red := renderListGutter(false, registry.StatusHalted); strings.Contains(out, red) {
+		t.Fatalf("halted gutter colour must not show for a live counter: %q", out)
 	}
 }

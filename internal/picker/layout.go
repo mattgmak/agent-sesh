@@ -203,7 +203,7 @@ func renderListFrame(
 		item := renderItems[i]
 		selected := opts.showCursor && i == localCursor
 
-		gutter := renderListGutter(selected, item.Status)
+		gutter := renderListGutter(selected, item.DisplayStatus())
 		gutterWidth := lipgloss.Width(gutter)
 		bodyWidth := lineWidth - gutterWidth - listEntryGapWidth
 		if bodyWidth < 1 {

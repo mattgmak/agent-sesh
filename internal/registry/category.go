@@ -15,7 +15,7 @@ func StatusCategory(status Status) Category {
 	switch status {
 	case StatusHalted, StatusAwaitingInput:
 		return CategoryAttention
-	case StatusWorking, StatusToolCall:
+	case StatusWorking, StatusToolCall, StatusSubagentsRunning, StatusBgJobsRunning:
 		return CategoryActive
 	case StatusUnknown:
 		return CategoryUnknown
@@ -35,7 +35,7 @@ type CategoryCounts struct {
 func CountByCategory(sessions []Session) CategoryCounts {
 	var counts CategoryCounts
 	for _, s := range sessions {
-		switch StatusCategory(s.Status) {
+		switch StatusCategory(s.DisplayStatus()) {
 		case CategoryAttention:
 			counts.Attention++
 		case CategoryActive:

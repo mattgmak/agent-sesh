@@ -70,3 +70,16 @@ func TestApplySessionsIfChangedAcceptsVisibleChange(t *testing.T) {
 		t.Fatalf("sessions not updated: %+v", m.sessions[0])
 	}
 }
+
+func TestSessionsRenderKeyDetectsCounterChange(t *testing.T) {
+	base := []registry.Session{{ID: "1", TmuxTarget: "%1", Status: registry.StatusIdle}}
+	subagent := []registry.Session{{ID: "1", TmuxTarget: "%1", Status: registry.StatusIdle, SubagentsRunning: 3}}
+	bgJob := []registry.Session{{ID: "1", TmuxTarget: "%1", Status: registry.StatusIdle, BgJobsRunning: 2}}
+
+	if sessionsRenderKey(base) == sessionsRenderKey(subagent) {
+		t.Fatal("expected subagent counter change to affect render key")
+	}
+	if sessionsRenderKey(base) == sessionsRenderKey(bgJob) {
+		t.Fatal("expected bg job counter change to affect render key")
+	}
+}

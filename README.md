@@ -18,7 +18,7 @@
 
 ## What it does
 
-- **See every agent at a glance** — panes running an agent show status (`idle`, `working`, `tool_call`, `waiting`), the tool currently executing, the model, git branch, and working directory
+- **See every agent at a glance** — panes running an agent show status (`idle`, `working`, `tool_call`, `awaiting_input`, `halted`, `unknown`, `subagents_running`, `bg_jobs_running`). They also show a child and job count, the tool currently executing, the model, git branch, and working directory
 - **Discover agents automatically** — panes running an agent that never registered are detected by scanning the pane's tty (even when the agent runs under `node` or a wrapper like `reattach-to-user-namespace`) and listed as dimmed entries
 - **Jump, kill, or extend** — attach to a session, kill a pane or a whole session, open a new window, all from the picker
 - **Scrollback preview** — the right panel shows live `capture-pane` output for the highlighted pane
@@ -88,7 +88,7 @@ go install github.com/mattgmak/agent-sesh@latest
 
 ## Pi extension
 
-For full status (model, current tool, working/waiting), each pi agent needs the `pi-agent-sesh` extension from [`extensions/pi-agent-sesh`](extensions/pi-agent-sesh). Symlink or copy it into your pi extensions directory and reload pi. Sessions whose extension isn't loaded are still discoverable, just without live status.
+For full status (model, current tool, state, running counts), each pi agent needs the `pi-agent-sesh` extension from [`extensions/pi-agent-sesh`](extensions/pi-agent-sesh). Symlink or copy it into your pi extensions directory and reload pi. Sessions whose extension is not loaded are still discoverable, just without live status.
 
 ## Usage
 
@@ -137,6 +137,8 @@ The registry is the contract between the pi extension (writer) and the picker (r
       "title": "agent-sesh specs",
       "pi_session_name": "agent-sesh specs",
       "status": "tool_call",
+      "subagents_running": 2,
+      "bg_jobs_running": 1,
       "tool_name": "Shell: go mod tidy",
       "model": "claude-sonnet-4",
       "agent": "pi",
@@ -146,7 +148,13 @@ The registry is the contract between the pi extension (writer) and the picker (r
 }
 ```
 
-Status model: `idle` · `working` · `tool_call` · `waiting`.
+Status model: `idle` · `working` · `tool_call` · `awaiting_input` · `halted` · `unknown` · `subagents_running` · `bg_jobs_running`.
+
+The `status` field holds the recorded state of the agent. The picker shows a displayed state instead. `working`, `tool_call` and `awaiting_input` always win. Otherwise, a live child count turns `idle` or `halted` into `subagents_running`. A live job count turns the state into `bg_jobs_running`. Both new states render green.
+
+The glyph for `subagents_running` is a sitemap. The glyph for `bg_jobs_running` is a cogs icon. A count element follows the agent name. The sitemap glyph and the child count show in magenta. The cogs glyph and the job count show in blue. A count shows while it is above zero.
+
+Two pi extensions publish the counts. `pi-interactive-subagents` sends the live child count on the `pi.events` channel `agent-sesh:subagents-running:v1`. `pi-lean-ctx` sends job start and stop on `agent-sesh:background-jobs-running:v1`. The `pi-agent-sesh` extension writes both counters into the registry.
 
 ## Requirements
 

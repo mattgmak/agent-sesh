@@ -11,6 +11,8 @@ func TestStatusCategory(t *testing.T) {
 		{StatusAwaitingInput, CategoryAttention},
 		{StatusWorking, CategoryActive},
 		{StatusToolCall, CategoryActive},
+		{StatusSubagentsRunning, CategoryActive},
+		{StatusBgJobsRunning, CategoryActive},
 		{StatusUnknown, CategoryUnknown},
 		{StatusIdle, CategoryIdle},
 		{Status("unknown"), CategoryUnknown},
@@ -33,6 +35,18 @@ func TestCountByCategory(t *testing.T) {
 	}
 	got := CountByCategory(sessions)
 	want := CategoryCounts{Attention: 2, Active: 2, Idle: 2}
+	if got != want {
+		t.Fatalf("CountByCategory() = %+v, want %+v", got, want)
+	}
+}
+
+func TestCountByCategoryUsesDisplayStatus(t *testing.T) {
+	sessions := []Session{
+		{ID: "subagents", Status: StatusHalted, SubagentsRunning: 2},
+		{ID: "bg", Status: StatusIdle, BgJobsRunning: 1},
+	}
+	got := CountByCategory(sessions)
+	want := CategoryCounts{Active: 2}
 	if got != want {
 		t.Fatalf("CountByCategory() = %+v, want %+v", got, want)
 	}

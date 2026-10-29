@@ -21,6 +21,10 @@ func StatusPriority(status Status) int {
 		return 4
 	case StatusToolCall:
 		return 5
+	case StatusSubagentsRunning:
+		return 6
+	case StatusBgJobsRunning:
+		return 7
 	default:
 		return 3
 	}

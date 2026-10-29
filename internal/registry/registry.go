@@ -20,12 +20,16 @@ const (
 	StatusToolCall      Status = "tool_call"
 	StatusHalted        Status = "halted"
 	StatusAwaitingInput Status = "awaiting_input"
+
+	StatusSubagentsRunning Status = "subagents_running"
+	StatusBgJobsRunning    Status = "bg_jobs_running"
 )
 
 // NormalizeStatus maps legacy status strings to canonical values.
 func NormalizeStatus(status Status) Status {
 	switch status {
-	case StatusUnknown, StatusIdle, StatusWorking, StatusToolCall, StatusHalted, StatusAwaitingInput:
+	case StatusUnknown, StatusIdle, StatusWorking, StatusToolCall, StatusHalted, StatusAwaitingInput,
+		StatusSubagentsRunning, StatusBgJobsRunning:
 		return status
 	case "waiting":
 		return StatusHalted
@@ -52,6 +56,28 @@ type Session struct {
 	Status        Status `json:"status"`
 	ToolName      string `json:"tool_name"`
 	UpdatedAt     string `json:"updated_at,omitempty"`
+	// Running counters keep a busy session visible after its status goes idle.
+	SubagentsRunning int `json:"subagents_running"`
+	BgJobsRunning    int `json:"bg_jobs_running"`
+}
+
+// DisplayStatus resolves the status that the picker and status bar show.
+// Counters only win while the session is not busy or blocked.
+func (s Session) DisplayStatus() Status {
+	switch s.Status {
+	case StatusWorking, StatusToolCall, StatusAwaitingInput:
+		return s.Status
+	case StatusHalted, StatusIdle:
+		if s.SubagentsRunning > 0 {
+			return StatusSubagentsRunning
+		}
+		if s.BgJobsRunning > 0 {
+			return StatusBgJobsRunning
+		}
+		return s.Status
+	default:
+		return s.Status
+	}
 }
 
 type File struct {

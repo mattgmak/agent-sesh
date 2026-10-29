@@ -150,7 +150,9 @@ func TestStatusIcon(t *testing.T) {
 		{registry.StatusWorking, iconWorking},
 		{registry.StatusHalted, iconHalted},
 		{registry.StatusAwaitingInput, iconAwaitingInput},
-		{registry.StatusToolCall, iconStatusToolCall},
+		{registry.StatusToolCall, "\U000F0493"}, // md-cog
+		{registry.StatusSubagentsRunning, iconSubagentsRunning},
+		{registry.StatusBgJobsRunning, iconBgJobsRunning},
 		{registry.StatusUnknown, iconUnknown},
 		{registry.StatusIdle, iconIdle},
 		{registry.Status("unknown"), iconUnknown},
@@ -166,18 +168,22 @@ func TestStatusIcon(t *testing.T) {
 func TestStatusIconsMatchNerdFontMDI(t *testing.T) {
 	// Codepoints from nerd-fonts bin/scripts/lib/i_md.sh (MDI) / i_fa.sh (FA).
 	want := map[string]rune{
-		"idle":           '\U000F04B2', // nf-md (user choice)
-		"working":        '\U000F09D1', // nf-md-brain
-		"halted":         '\U000F0377', // nf-md (user choice)
-		"awaiting_input": '\uF128',     // nf-fa-question
-		"tool_call":      '\U000F0996', // nf-md-progress_clock
+		"idle":              '\U000F04B2', // nf-md (user choice)
+		"working":           '\U000F09D1', // nf-md-brain
+		"halted":            '\U000F0377', // nf-md (user choice)
+		"awaiting_input":    '\uF128',     // nf-fa-question
+		"tool_call":         '\U000F0493', // nf-md-cog
+		"subagents_running": '\U000F04AA', // nf-md-sitemap
+		"bg_jobs_running":   '\U000F08D6', // nf-md-cogs
 	}
 	got := map[string]rune{
-		"idle":           []rune(iconIdle)[0],
-		"working":        []rune(iconWorking)[0],
-		"halted":         []rune(iconHalted)[0],
-		"awaiting_input": []rune(iconAwaitingInput)[0],
-		"tool_call":      []rune(iconStatusToolCall)[0],
+		"idle":              []rune(iconIdle)[0],
+		"working":           []rune(iconWorking)[0],
+		"halted":            []rune(iconHalted)[0],
+		"awaiting_input":    []rune(iconAwaitingInput)[0],
+		"tool_call":         []rune(iconStatusToolCall)[0],
+		"subagents_running": []rune(iconSubagentsRunning)[0],
+		"bg_jobs_running":   []rune(iconBgJobsRunning)[0],
 	}
 	for name, expected := range want {
 		if got[name] != expected {
@@ -489,5 +495,16 @@ func TestViewPutsFilterBelowSessions(t *testing.T) {
 	}
 	if filterLine <= sessionLine {
 		t.Fatalf("expected filter below sessions, session@%d filter@%d", sessionLine, filterLine)
+	}
+}
+
+func TestSessionSearchTextIncludesResolvedStatus(t *testing.T) {
+	session := registry.Session{TmuxSession: "demo", Status: registry.StatusHalted, SubagentsRunning: 1}
+	if !strings.Contains(sessionSearchText(session), "subagents_running") {
+		t.Fatalf("expected resolved status in search text, got %q", sessionSearchText(session))
+	}
+	bgSession := registry.Session{TmuxSession: "demo", Status: registry.StatusIdle, BgJobsRunning: 1}
+	if !strings.Contains(sessionSearchText(bgSession), "bg_jobs_running") {
+		t.Fatalf("expected resolved status in search text, got %q", sessionSearchText(bgSession))
 	}
 }

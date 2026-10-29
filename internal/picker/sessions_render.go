@@ -1,6 +1,7 @@
 package picker
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/mattgmak/agent-sesh/internal/registry"
@@ -43,6 +44,12 @@ func writeSessionRenderFields(b *strings.Builder, session registry.Session) {
 	b.WriteString(session.TmuxWindow)
 	b.WriteByte('\x00')
 	b.WriteString(session.TmuxPane)
+	b.WriteByte('\x00')
+	b.WriteString(string(session.DisplayStatus()))
+	b.WriteByte('\x00')
+	b.WriteString(strconv.Itoa(session.SubagentsRunning))
+	b.WriteByte('\x00')
+	b.WriteString(strconv.Itoa(session.BgJobsRunning))
 }
 
 func (m *model) syncSessionsRenderKey() {

@@ -12,7 +12,7 @@ import type {
 	ToolExecutionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -26,13 +26,22 @@ const refreshTimeoutMs = 1000;
 const branchCacheMs = 5000;
 const branchCache = new Map<string, { branch?: string; at: number }>();
 
+/** Cross-extension channels emitted by pi-interactive-subagents and ctx_bg. */
+export const CH_SUBAGENTS_RUNNING = "agent-sesh:subagents-running:v1";
+export const CH_BG_JOBS_RUNNING = "agent-sesh:background-jobs-running:v1";
+/** An activity file older than this belongs to a subagent that already ended. */
+export const subagentActivityFreshMs = 120_000;
+
 export type AgentSeshStatus =
 	| "unknown"
 	| "idle"
 	| "working"
 	| "tool_call"
 	| "halted"
-	| "awaiting_input";
+	| "awaiting_input"
+	// Display-only states. The picker resolves them from the running counters.
+	| "subagents_running"
+	| "bg_jobs_running";
 
 export interface AgentSeshSession {
 	id: string;
@@ -49,6 +58,8 @@ export interface AgentSeshSession {
 	status: AgentSeshStatus;
 	tool_name?: string;
 	model?: string;
+	subagents_running?: number;
+	bg_jobs_running?: number;
 	agent: "pi";
 	updated_at: string;
 }
@@ -462,6 +473,63 @@ function truncateToolName(toolName: string): string {
 	return toolName.length > 64 ? `${toolName.slice(0, 61)}...` : toolName;
 }
 
+function payloadRecord(payload: unknown): Record<string, unknown> | undefined {
+	return payload && typeof payload === "object" && !Array.isArray(payload)
+		? (payload as Record<string, unknown>)
+		: undefined;
+}
+
+function runningCount(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return undefined;
+	}
+	return Math.max(0, Math.trunc(value));
+}
+
+/**
+ * Count for the subagents channel. Undefined means ignore, because the payload
+ * is malformed or belongs to another pi session.
+ */
+export function resolveSubagentsRunning(
+	payload: unknown,
+	sessionId: string | undefined,
+): number | undefined {
+	if (!sessionId) {
+		return undefined;
+	}
+	const data = payloadRecord(payload);
+	if (!data) {
+		return undefined;
+	}
+	const parent = data.parentSessionId;
+	if (typeof parent === "string" && parent.trim() && parent !== sessionId) {
+		return undefined;
+	}
+	return runningCount(data.running);
+}
+
+/** Trust the payload count, so a restart or a missed stop self-corrects. */
+export function resolveBgJobsRunning(payload: unknown): number | undefined {
+	const data = payloadRecord(payload);
+	if (!data || (data.phase !== "start" && data.phase !== "stop")) {
+		return undefined;
+	}
+	return runningCount(data.active);
+}
+
+/** Fresh activity file that is not in its terminal phase. */
+export function isRunningSubagentActivity(
+	raw: unknown,
+	mtimeMs: number,
+	nowMs: number,
+): boolean {
+	const data = payloadRecord(raw);
+	if (!data || data.phase === "done") {
+		return false;
+	}
+	return nowMs - mtimeMs <= subagentActivityFreshMs;
+}
+
 export async function upsertSession(partial: {
 	id: string;
 	cwd: string;
@@ -507,6 +575,8 @@ export async function upsertSession(partial: {
 					? undefined
 					: normalizeToolName(partial.tool_name ?? existing?.tool_name),
 			model: partial.model ?? existing?.model,
+			subagents_running: existing?.subagents_running,
+			bg_jobs_running: existing?.bg_jobs_running,
 			agent: "pi",
 			updated_at: now,
 		};
@@ -626,9 +696,145 @@ export async function setStatus(
 	});
 }
 
+export interface RunningCounters {
+	subagents_running?: number;
+	bg_jobs_running?: number;
+}
+
+/**
+ * Write only the two running counters. Every other field, including
+ * updated_at, stays as stored, so a counter write never outranks a newer
+ * status row in mergeSessions.
+ */
+export async function writeRunningCounters(
+	id: string,
+	patch: RunningCounters,
+): Promise<void> {
+	const subagents = runningCount(patch.subagents_running);
+	const bg = runningCount(patch.bg_jobs_running);
+	if (subagents === undefined && bg === undefined) {
+		return;
+	}
+	let wrote = false;
+	await withRegistryLock(async () => {
+		const latest = await readRegistry();
+		const idx = latest.sessions.findIndex((session) => session.id === id);
+		if (idx < 0) {
+			return;
+		}
+		const stored = latest.sessions[idx];
+		const next: AgentSeshSession = {
+			...stored,
+			subagents_running: subagents ?? stored.subagents_running,
+			bg_jobs_running: bg ?? stored.bg_jobs_running,
+		};
+		if (
+			next.subagents_running === stored.subagents_running &&
+			next.bg_jobs_running === stored.bg_jobs_running
+		) {
+			return;
+		}
+		await writeRegistryUnlocked({
+			version: 1,
+			sessions: [next, ...latest.sessions.filter((_, i) => i !== idx)],
+		});
+		wrote = true;
+	});
+	if (wrote) {
+		await refreshTmuxStatusBar();
+	}
+}
+
+/** Count running subagents from their activity files. Undefined means the
+ * directory is unreadable, so the stored counter stays. */
+async function countRunningSubagents(
+	sessionDir: string,
+	sessionId: string,
+	nowMs: number,
+): Promise<number | undefined> {
+	const dir = join(sessionDir, "artifacts", sessionId, "subagent-activity");
+	let names: string[];
+	try {
+		names = await readdir(dir);
+	} catch {
+		return undefined;
+	}
+	let count = 0;
+	for (const name of names) {
+		if (!name.endsWith(".json")) {
+			continue;
+		}
+		const file = join(dir, name);
+		try {
+			const [raw, stats] = await Promise.all([
+				readFile(file, "utf8"),
+				stat(file),
+			]);
+			if (isRunningSubagentActivity(JSON.parse(raw), stats.mtimeMs, nowMs)) {
+				count++;
+			}
+		} catch {
+			continue;
+		}
+	}
+	return count;
+}
+
 export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 	let sessionId: string | undefined;
 	let lastTitle = "pi session";
+	let currentCtx: ExtensionContext | undefined;
+	const unsubscribers: Array<() => void> = [];
+
+	// No ctx.isIdle() gate on the counter writes: a stop event lands after the
+	// agent settled, and the count must still fall.
+	async function writeSubagentCount(payload: unknown): Promise<void> {
+		const id = currentCtx?.sessionManager.getSessionId();
+		const running = resolveSubagentsRunning(payload, id);
+		if (!id || running === undefined) {
+			return;
+		}
+		await writeRunningCounters(id, { subagents_running: running });
+	}
+
+	async function writeBgCount(payload: unknown): Promise<void> {
+		const id = currentCtx?.sessionManager.getSessionId();
+		const pending = resolveBgJobsRunning(payload);
+		if (!id || pending === undefined) {
+			return;
+		}
+		await writeRunningCounters(id, { bg_jobs_running: pending });
+	}
+
+	// A session_shutdown without a reload would otherwise leave the counters
+	// dead, so every start re-subscribes when nothing is registered.
+	function subscribeChannelEvents(): void {
+		if (unsubscribers.length > 0) {
+			return;
+		}
+		const events = pi.events;
+		if (!events || typeof events.on !== "function") {
+			return;
+		}
+		unsubscribers.push(
+			events.on(CH_SUBAGENTS_RUNNING, (payload) => {
+				writeSubagentCount(payload).catch(() => {});
+			}),
+			events.on(CH_BG_JOBS_RUNNING, (payload) => {
+				writeBgCount(payload).catch(() => {});
+			}),
+		);
+	}
+
+	function unsubscribeChannelEvents(): void {
+		for (const off of unsubscribers.splice(0)) {
+			try {
+				off();
+			} catch {
+				// a dead bus must not block shutdown
+			}
+		}
+	}
 
 	function requireSessionId(ctx: ExtensionContext): string | undefined {
 		return sessionId ?? ctx.sessionManager.getSessionId();
@@ -637,6 +843,8 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 	pi.on(
 		"session_start",
 		async (event: SessionStartEvent, ctx: ExtensionContext) => {
+			currentCtx = ctx;
+			subscribeChannelEvents();
 			sessionId = ctx.sessionManager.getSessionId();
 			if (!sessionId) {
 				return;
@@ -659,6 +867,20 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 				pi_session_name: piSessionName(pi),
 				...statusPatch,
 			});
+			// Seed only the subagent counter: ctx_bg keeps no on-disk state.
+			try {
+				const sessionDir = ctx.sessionManager.getSessionDir();
+				const seed = await countRunningSubagents(
+					sessionDir,
+					sessionId,
+					Date.now(),
+				);
+				if (seed !== undefined) {
+					await writeRunningCounters(sessionId, { subagents_running: seed });
+				}
+			} catch {
+				// older pi builds lack getSessionDir; channel events self-correct
+			}
 		},
 	);
 
@@ -800,6 +1022,8 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 	pi.on(
 		"session_shutdown",
 		async (_event: SessionShutdownEvent, ctx: ExtensionContext) => {
+			unsubscribeChannelEvents();
+			currentCtx = undefined;
 			const id = requireSessionId(ctx);
 			const target = await tmuxTarget();
 			if (!id && !target) {
@@ -809,4 +1033,6 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 			sessionId = undefined;
 		},
 	);
+
+	subscribeChannelEvents();
 }

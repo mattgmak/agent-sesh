@@ -16,6 +16,8 @@ func TestStatusPriority(t *testing.T) {
 		{StatusIdle, 3},
 		{StatusWorking, 4},
 		{StatusToolCall, 5},
+		{StatusSubagentsRunning, 6},
+		{StatusBgJobsRunning, 7},
 		{Status("bogus"), 3},
 	}
 	for _, tc := range tests {
@@ -36,6 +38,24 @@ func TestSortSessionsByStatus(t *testing.T) {
 	SortSessions(sessions)
 
 	want := []string{"waiting", "idle", "working", "tool"}
+	for i, id := range want {
+		if sessions[i].ID != id {
+			t.Fatalf("sessions[%d].ID = %q, want %q (full=%+v)", i, sessions[i].ID, id, sessions)
+		}
+	}
+}
+
+func TestSortSessionsBusyCountersOrder(t *testing.T) {
+	sessions := []Session{
+		{ID: "bg", Status: StatusBgJobsRunning},
+		{ID: "tool", Status: StatusToolCall},
+		{ID: "subagents", Status: StatusSubagentsRunning},
+		{ID: "working", Status: StatusWorking},
+	}
+
+	SortSessions(sessions)
+
+	want := []string{"working", "tool", "subagents", "bg"}
 	for i, id := range want {
 		if sessions[i].ID != id {
 			t.Fatalf("sessions[%d].ID = %q, want %q (full=%+v)", i, sessions[i].ID, id, sessions)

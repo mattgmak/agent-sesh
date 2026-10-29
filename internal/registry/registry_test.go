@@ -230,3 +230,33 @@ func TestDefaultPathXDG(t *testing.T) {
 		t.Fatalf("got %q, want %q", path, want)
 	}
 }
+
+func TestNormalizeStatusKeepsCounterStatuses(t *testing.T) {
+	for _, status := range []Status{StatusSubagentsRunning, StatusBgJobsRunning} {
+		if got := NormalizeStatus(status); got != status {
+			t.Errorf("NormalizeStatus(%q) = %q, want %q", status, got, status)
+		}
+	}
+}
+
+func TestSessionDisplayStatus(t *testing.T) {
+	tests := []struct {
+		name    string
+		session Session
+		want    Status
+	}{
+		{"working wins over counters", Session{Status: StatusWorking, SubagentsRunning: 2}, StatusWorking},
+		{"tool_call wins over counters", Session{Status: StatusToolCall, BgJobsRunning: 2}, StatusToolCall},
+		{"awaiting wins over counters", Session{Status: StatusAwaitingInput, SubagentsRunning: 1}, StatusAwaitingInput},
+		{"halted with subagents", Session{Status: StatusHalted, SubagentsRunning: 1}, StatusSubagentsRunning},
+		{"idle with bg jobs", Session{Status: StatusIdle, BgJobsRunning: 4}, StatusBgJobsRunning},
+		{"halted both counters picks subagents", Session{Status: StatusHalted, SubagentsRunning: 1, BgJobsRunning: 5}, StatusSubagentsRunning},
+		{"halted zero counters", Session{Status: StatusHalted}, StatusHalted},
+		{"unknown unchanged", Session{Status: Status("bogus"), SubagentsRunning: 3}, Status("bogus")},
+	}
+	for _, tc := range tests {
+		if got := tc.session.DisplayStatus(); got != tc.want {
+			t.Errorf("%s: DisplayStatus() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

@@ -15,14 +15,16 @@ var (
 	// Entry element styles — each meta chunk gets its own hue for quick scanning.
 	sessionStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(15)).Bold(true)
 	// User-set pi session name (/name); bright magenta is unused by other chunks.
-	sessionNameStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(13)).Bold(true)
-	paneStyle        = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
-	agentStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("135"))
-	modelStyle       = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
-	branchStyle      = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(14)).Bold(true)
-	toolStyle        = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(5)).Bold(true)
-	cwdStyle         = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(4)).Faint(true)
-	promptStyle      = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(7)).Faint(true)
+	sessionNameStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(13)).Bold(true)
+	paneStyle          = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
+	agentStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("135"))
+	modelStyle         = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(3))
+	branchStyle        = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(14)).Bold(true)
+	toolStyle          = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(5)).Bold(true)
+	subagentCountStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(5)).Bold(true)
+	bgJobCountStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(4)).Bold(true)
+	cwdStyle           = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(4)).Faint(true)
+	promptStyle        = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(7)).Faint(true)
 
 	dimStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8)).Faint(true)
 	faintStyle = lipgloss.NewStyle().Faint(true)
@@ -68,12 +70,14 @@ func gutterStyleFor(status registry.Status, selected bool) lipgloss.Style {
 }
 
 var statusLabelStyles = map[registry.Status]lipgloss.Style{
-	registry.StatusWorking:       lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(2)).Bold(true),
-	registry.StatusToolCall:      lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(2)).Bold(true),
-	registry.StatusHalted:        lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(1)).Bold(true),
-	registry.StatusAwaitingInput: lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.Color("220")).Bold(true),
-	registry.StatusUnknown:       lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(6)).Bold(true),
-	registry.StatusIdle:          lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(8)),
+	registry.StatusWorking:          lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(2)).Bold(true),
+	registry.StatusToolCall:         lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(2)).Bold(true),
+	registry.StatusSubagentsRunning: lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(2)).Bold(true),
+	registry.StatusBgJobsRunning:    lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(2)).Bold(true),
+	registry.StatusHalted:           lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(1)).Bold(true),
+	registry.StatusAwaitingInput:    lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.Color("220")).Bold(true),
+	registry.StatusUnknown:          lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(6)).Bold(true),
+	registry.StatusIdle:             lipgloss.NewStyle().UnsetBackground().Foreground(lipgloss.ANSIColor(8)),
 }
 
 func statusLabelStyle(status registry.Status) lipgloss.Style {

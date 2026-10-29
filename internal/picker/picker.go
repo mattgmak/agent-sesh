@@ -36,28 +36,30 @@ var capturePane = tmux.CapturePane
 
 // Nerd Font codepoints (MDI from bin/scripts/lib/i_md.sh, FA from i_fa.sh).
 const (
-	iconUnknown        = "\U000F0625" // 󰘥 help-circle-outline
-	iconIdle           = "\U000F04B2" // 󰒲 (user choice)
-	iconWorking        = "\U000F09D1" // 󰧑 brain
-	iconToolCall       = "\U000F1322" // 󱌢 hammer-screwdriver (tool metadata)
-	iconStatusToolCall = "\U000F0996" // 󰦖 progress-clock (tool_call status)
-	iconHalted         = "\U000F0377" // 󰍷 (user choice)
-	iconAwaitingInput  = "\uF128"     //  nf-fa-question
-	iconFolder         = "\U000F0256" // 󰉖 folder-outline
-	iconBranch         = "\U000F062C" // 󰘬 source-branch
-	iconAgent          = "\U000F06A9" // 󰚩 robot
-	iconModel          = "\U000F09D1" // 󰧑 brain
-	iconSession        = "\U000F018D" // 󰆍 console
-	iconSessionName    = "\U0000F02E" //  bookmark
-	iconPane           = "\U000F0BCC" // 󰯌 view-split-vertical
-	iconPrompt         = "\U000F036A" // 󰍪 message-text-outline
-	iconAttach         = "\U000F0339" // 󰌹 link-variant
-	iconKillPane       = "\U000F0158" // 󰅘 close-box-outline
-	iconKillSess       = "\U000F05E8" // 󰗨 delete-forever
-	iconNewWin         = "\U000F05B1" // 󰖱 window-open
-	iconFilter         = "\U000F0349" // 󰍉 magnify
-	iconRename         = "\U000F0455" // 󰑕 rename-box
-	iconQuit           = "\U000F0206" // 󰈆 exit-to-app
+	iconUnknown          = "\U000F0625" // 󰘥 help-circle-outline
+	iconIdle             = "\U000F04B2" // 󰒲 (user choice)
+	iconWorking          = "\U000F09D1" // 󰧑 brain
+	iconToolCall         = "\U000F0493" // 󰒓 cog (tool metadata)
+	iconStatusToolCall   = "\U000F0493" // 󰒓 cog (tool_call status)
+	iconSubagentsRunning = "\U000F04AA" // 󰒪 sitemap
+	iconBgJobsRunning    = "\U000F08D6" // 󰣖 cogs
+	iconHalted           = "\U000F0377" // 󰍷 (user choice)
+	iconAwaitingInput    = "\uF128"     //  nf-fa-question
+	iconFolder           = "\U000F0256" // 󰉖 folder-outline
+	iconBranch           = "\U000F062C" // 󰘬 source-branch
+	iconAgent            = "\U000F06A9" // 󰚩 robot
+	iconModel            = "\U000F09D1" // 󰧑 brain
+	iconSession          = "\U000F018D" // 󰆍 console
+	iconSessionName      = "\U0000F02E" //  bookmark
+	iconPane             = "\U000F0BCC" // 󰯌 view-split-vertical
+	iconPrompt           = "\U000F036A" // 󰍪 message-text-outline
+	iconAttach           = "\U000F0339" // 󰌹 link-variant
+	iconKillPane         = "\U000F0158" // 󰅘 close-box-outline
+	iconKillSess         = "\U000F05E8" // 󰗨 delete-forever
+	iconNewWin           = "\U000F05B1" // 󰖱 window-open
+	iconFilter           = "\U000F0349" // 󰍉 magnify
+	iconRename           = "\U000F0455" // 󰑕 rename-box
+	iconQuit             = "\U000F0206" // 󰈆 exit-to-app
 )
 
 type tickMsg struct{}
@@ -311,6 +313,7 @@ func sessionSearchText(session registry.Session) string {
 		session.CWD,
 		session.Branch,
 		string(session.Status),
+		string(session.DisplayStatus()),
 		session.ToolName,
 		session.Agent,
 		session.Model,
@@ -709,8 +712,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var refresh tea.Cmd
 		if m.splitActive() {
 			if session, ok := m.selected(); ok {
-				switch session.Status {
-				case registry.StatusWorking, registry.StatusToolCall:
+				switch session.DisplayStatus() {
+				case registry.StatusWorking, registry.StatusToolCall, registry.StatusSubagentsRunning, registry.StatusBgJobsRunning:
 					refresh = (&m).forcePreviewRefresh()
 				}
 			}
@@ -947,6 +950,10 @@ func statusIcon(status registry.Status) string {
 		return iconAwaitingInput
 	case registry.StatusToolCall:
 		return iconStatusToolCall
+	case registry.StatusSubagentsRunning:
+		return iconSubagentsRunning
+	case registry.StatusBgJobsRunning:
+		return iconBgJobsRunning
 	case registry.StatusUnknown:
 		return iconUnknown
 	default:

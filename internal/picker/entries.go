@@ -1,6 +1,7 @@
 package picker
 
 import (
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -113,7 +114,7 @@ func buildMetaChunks(session registry.Session) []metaChunk {
 		agent = "pi"
 	}
 
-	chunks := make([]metaChunk, 0, 8)
+	chunks := make([]metaChunk, 0, 10)
 	if piName := strings.TrimSpace(session.PiSessionName); piName != "" {
 		chunks = append(chunks, metaChunk{icon: iconSessionName, text: piName, style: sessionNameStyle})
 	}
@@ -122,6 +123,12 @@ func buildMetaChunks(session registry.Session) []metaChunk {
 		chunks = append(chunks, metaChunk{icon: iconPane, text: paneLabel, style: paneStyle})
 	}
 	chunks = append(chunks, metaChunk{icon: iconAgent, text: agent, style: agentStyle})
+	if session.SubagentsRunning > 0 {
+		chunks = append(chunks, metaChunk{icon: iconSubagentsRunning, text: strconv.Itoa(session.SubagentsRunning), style: subagentCountStyle})
+	}
+	if session.BgJobsRunning > 0 {
+		chunks = append(chunks, metaChunk{icon: iconBgJobsRunning, text: strconv.Itoa(session.BgJobsRunning), style: bgJobCountStyle})
+	}
 	if model := strings.TrimSpace(session.Model); model != "" {
 		chunks = append(chunks, metaChunk{icon: iconModel, text: model, style: modelStyle})
 	}
@@ -265,7 +272,7 @@ func formatPromptLine(session registry.Session, width int) string {
 }
 
 func formatSessionEntry(session registry.Session, width int) []string {
-	meta := layoutMetaChunks(session.Status, buildMetaChunks(session), width)
+	meta := layoutMetaChunks(session.DisplayStatus(), buildMetaChunks(session), width)
 	prompt := formatPromptLine(session, width)
 	if prompt == "" {
 		return meta
