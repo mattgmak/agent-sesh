@@ -780,6 +780,22 @@ async function countRunningSubagents(
 	return count;
 }
 
+/**
+ * Counters to write when a session starts. The process is new, so it owns zero
+ * background jobs. That zero is a fact. A missing subagent seed keeps the
+ * stored value.
+ */
+export function sessionStartCounters(
+	subagentSeed: number | undefined,
+): RunningCounters {
+	const patch: RunningCounters = { bg_jobs_running: 0 };
+	const seed = runningCount(subagentSeed);
+	if (seed !== undefined) {
+		patch.subagents_running = seed;
+	}
+	return patch;
+}
+
 export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 	let sessionId: string | undefined;
 	let lastTitle = "pi session";
@@ -867,20 +883,23 @@ export default function piAgentSeshExtension(pi: ExtensionAPI): void {
 				pi_session_name: piSessionName(pi),
 				...statusPatch,
 			});
-			// Seed only the subagent counter: ctx_bg keeps no on-disk state.
+			// Seed both counters. Subagents rebuild from activity files. Background
+			// jobs die with the old process, so the start value is zero.
+			let subagentSeed: number | undefined;
 			try {
 				const sessionDir = ctx.sessionManager.getSessionDir();
-				const seed = await countRunningSubagents(
+				subagentSeed = await countRunningSubagents(
 					sessionDir,
 					sessionId,
 					Date.now(),
 				);
-				if (seed !== undefined) {
-					await writeRunningCounters(sessionId, { subagents_running: seed });
-				}
 			} catch {
 				// older pi builds lack getSessionDir; channel events self-correct
 			}
+			await writeRunningCounters(
+				sessionId,
+				sessionStartCounters(subagentSeed),
+			);
 		},
 	);
 

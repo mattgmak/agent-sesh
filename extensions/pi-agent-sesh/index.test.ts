@@ -13,6 +13,7 @@ import {
 	resolveSubagentsRunning,
 	resolveUpsertStatus,
 	mergeSessions,
+	sessionStartCounters,
 	setStatus,
 	shouldApplyStatusTransition,
 	writeRunningCounters,
@@ -278,6 +279,15 @@ test("isRunningSubagentActivity needs a fresh non-done file", () => {
 		isRunningSubagentActivity({ phase: "active" }, now - 121_000, now),
 		false,
 	);
+});
+
+test("sessionStartCounters resets the background job count", () => {
+	assert.deepEqual(sessionStartCounters(3), {
+		subagents_running: 3,
+		bg_jobs_running: 0,
+	});
+	assert.deepEqual(sessionStartCounters(undefined), { bg_jobs_running: 0 });
+	assert.equal(sessionStartCounters(-2).subagents_running, 0);
 });
 
 test("counter writes and status writes keep every other field", async () => {
