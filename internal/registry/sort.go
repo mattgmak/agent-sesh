@@ -5,37 +5,39 @@ import (
 	"time"
 )
 
-// StatusPriority ranks sessions for picker ordering. Lower values need attention
-// sooner and sort before higher values.
+// StatusPriority ranks sessions for picker ordering. The renderer draws index 0
+// at the bottom, so a low rank sits low on screen. The active group holds the
+// highest ranks and stays on top.
 func StatusPriority(status Status) int {
 	switch status {
-	case StatusHalted:
-		return 0
 	case StatusAwaitingInput:
+		return 0
+	case StatusHalted:
 		return 1
 	case StatusUnknown:
 		return 2
 	case StatusIdle:
 		return 3
-	case StatusWorking:
-		return 4
-	case StatusToolCall:
-		return 5
-	case StatusSubagentsRunning:
-		return 6
 	case StatusBgJobsRunning:
+		return 4
+	case StatusSubagentsRunning:
+		return 5
+	case StatusToolCall:
+		return 6
+	case StatusWorking:
 		return 7
 	default:
 		return 3
 	}
 }
 
-// SortSessions orders sessions by attention-needed status first, then MRU within
-// the same status (newest last_prompt_at first).
+// SortSessions orders sessions by priority rank, then MRU within the same rank
+// (newest last_prompt_at first). It ranks the resolved status, so a halted row
+// with a live counter joins the active group.
 func SortSessions(sessions []Session) {
 	sort.SliceStable(sessions, func(i, j int) bool {
-		pi := StatusPriority(sessions[i].Status)
-		pj := StatusPriority(sessions[j].Status)
+		pi := StatusPriority(sessions[i].DisplayStatus())
+		pj := StatusPriority(sessions[j].DisplayStatus())
 		if pi != pj {
 			return pi < pj
 		}
