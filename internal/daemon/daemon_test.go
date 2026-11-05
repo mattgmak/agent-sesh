@@ -235,14 +235,6 @@ func TestHubCoalesces(t *testing.T) {
 	}
 }
 
-func TestSendHandlerRejectsBadBody(t *testing.T) {
-	server, _ := newServer(t)
-	code, body := get(t, server.Handler(), http.MethodPost, "/v1/send", "{")
-	if code != http.StatusBadRequest {
-		t.Fatalf("code = %d, body = %s", code, body)
-	}
-}
-
 func TestPIDFileRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("AGENT_SESH_STATE_DIR", dir)

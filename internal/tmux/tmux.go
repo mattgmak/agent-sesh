@@ -75,27 +75,6 @@ func SwitchClient(target string) error {
 	return execRun("tmux.switch-client", "tmux", "switch-client", "-t", target)
 }
 
-// SendKeys writes text into a pane. The text goes through -l, so tmux treats
-// it as literal characters instead of key names. With enter it submits the line.
-func SendKeys(target, text string, enter bool) error {
-	target = strings.TrimSpace(target)
-	if target == "" {
-		return fmt.Errorf("empty pane target")
-	}
-	if text == "" && !enter {
-		return nil
-	}
-	if text != "" {
-		if err := execRun("tmux.send-keys", "tmux", "send-keys", "-t", target, "-l", text); err != nil {
-			return err
-		}
-	}
-	if !enter {
-		return nil
-	}
-	return execRun("tmux.send-keys-enter", "tmux", "send-keys", "-t", target, "Enter")
-}
-
 // ClientTTYs lists the ttys of every client attached to the tmux server.
 func ClientTTYs() ([]string, error) {
 	out, err := execOutput("tmux.list-clients", "tmux", "list-clients", "-F", "#{client_tty}")

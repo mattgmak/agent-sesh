@@ -146,7 +146,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/sessions", s.handleSessions)
 	mux.HandleFunc("/v1/counts", s.handleCounts)
 	mux.HandleFunc("/v1/preview", s.handlePreview)
-	mux.HandleFunc("/v1/send", s.handleSend)
 	mux.HandleFunc("/v1/events", s.handleEvents)
 	mux.HandleFunc("/", s.handleIndex)
 	return mux
@@ -477,7 +476,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"service": "agent-sesh",
 		"routes": []string{
-			"/v1/health", "/v1/sessions", "/v1/counts", "/v1/preview", "/v1/send", "/v1/events",
+			"/v1/health", "/v1/sessions", "/v1/counts", "/v1/preview", "/v1/events",
 		},
 	})
 }
@@ -540,32 +539,6 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write(buf.Bytes())
-}
-
-// SendRequest is the POST /v1/send body.
-type SendRequest struct {
-	Key   string `json:"key"`
-	Text  string `json:"text"`
-	Enter bool   `json:"enter"`
-}
-
-func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	var req SendRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	var buf bytes.Buffer
-	if err := picker.Send(&buf, req.Key, req.Text, req.Enter); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, map[string]any{"ok": true, "detail": strings.TrimSpace(buf.String())})
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {

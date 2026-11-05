@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"strconv"
@@ -55,41 +54,6 @@ func main() {
 				opts.JSON = true
 			}
 			if err := picker.List(os.Stdout, opts); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-			return
-		case "send":
-			if len(os.Args) < 3 {
-				fmt.Fprintln(os.Stderr, "usage: agent-sesh send <session-id|target> [text] [--no-enter] [--stdin]")
-				os.Exit(2)
-			}
-			key := os.Args[2]
-			text := ""
-			enter := true
-			fromStdin := false
-			var positional []string
-			for _, arg := range os.Args[3:] {
-				switch arg {
-				case "--no-enter":
-					enter = false
-				case "--stdin":
-					fromStdin = true
-				default:
-					positional = append(positional, arg)
-				}
-			}
-			if fromStdin {
-				data, err := io.ReadAll(os.Stdin)
-				if err != nil {
-					fmt.Fprintln(os.Stderr, err)
-					os.Exit(1)
-				}
-				text = string(data)
-			} else if len(positional) > 0 {
-				text = strings.Join(positional, " ")
-			}
-			if err := picker.Send(os.Stdout, key, text, enter); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}

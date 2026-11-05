@@ -49,20 +49,6 @@ func ResolveTarget(key string) (string, error) {
 	return "", fmt.Errorf("session %q not found", key)
 }
 
-// Send writes text into the pane of one session. Act-in-place from the picker
-// and `agent-sesh send` share this path.
-func Send(w io.Writer, key, text string, enter bool) error {
-	target, err := ResolveTarget(key)
-	if err != nil {
-		return err
-	}
-	if err := tmux.SendKeys(target, text, enter); err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "sent %d bytes to %s\n", len([]rune(text)), target)
-	return err
-}
-
 // WriteSessionsJSON renders registry rows as an indented JSON array.
 func WriteSessionsJSON(w io.Writer, sessions []registry.Session) error {
 	if sessions == nil {

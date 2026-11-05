@@ -20,7 +20,6 @@ type mode int
 const (
 	modeNormal mode = iota
 	modeRename
-	modeSend
 )
 
 const (
@@ -61,7 +60,6 @@ const (
 	iconNewWin           = "\U000F05B1" // 󰖱 window-open
 	iconFilter           = "\U000F0349" // 󰍉 magnify
 	iconRename           = "\U000F0455" // 󰑕 rename-box
-	iconSend             = "\U0000F1D8" // nf-fa-paper_plane
 	iconQuit             = "\U000F0206" // 󰈆 exit-to-app
 )
 
@@ -120,7 +118,6 @@ type model struct {
 	selectedTarget          string
 	filter                  textinput.Model
 	rename                  textinput.Model
-	send                    textinput.Model
 	bgColor                 color.Color
 	mode                    mode
 	width                   int
@@ -192,18 +189,10 @@ func Run() error {
 	configureTextInputStyles(&renameStyles)
 	rename.SetStyles(renameStyles)
 
-	send := textinput.New()
-	send.Prompt = iconSend + " "
-	send.CharLimit = 2000
-	sendStyles := send.Styles()
-	configureTextInputStyles(&sendStyles)
-	send.SetStyles(sendStyles)
-
 	m := model{
 		sessions:    sessions,
 		filter:      filter,
 		rename:      rename,
-		send:        send,
 		bgColor:     backgroundFromEnv(),
 		registry:    path,
 		loading:     true,
@@ -647,7 +636,6 @@ func (m model) syncInputWidth() {
 		width = 8
 	}
 	m.filter.SetWidth(width)
-	m.send.SetWidth(width)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -852,38 +840,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		if m.mode == modeSend {
-			switch msg.String() {
-			case "esc":
-				m.mode = modeNormal
-				m.send.SetValue("")
-				m.filter.Focus()
-				return m, nil
-			case "enter":
-				text := strings.TrimSpace(m.send.Value())
-				session, ok := m.selected()
-				m.mode = modeNormal
-				m.send.SetValue("")
-				m.filter.Focus()
-				if !ok {
-					return m, nil
-				}
-				if text == "" {
-					m.statusLine = "nothing to send"
-					return m, nil
-				}
-				if err := tmux.SendKeys(session.TmuxTarget, text, true); err != nil {
-					m.statusLine = err.Error()
-					return m, nil
-				}
-				m.statusLine = fmt.Sprintf("sent %d bytes to %s", len([]rune(text)), session.TmuxTarget)
-				return m, nil
-			}
-			var cmd tea.Cmd
-			m.send, cmd = m.send.Update(msg)
-			return m, cmd
-		}
-
 		switch msg.String() {
 		case "ctrl+c", "q":
 			m.quitting = true
@@ -974,16 +930,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.statusLine = "new window created"
 			return m, nil
-		case "ctrl+s":
-			session, ok := m.selected()
-			if !ok {
-				return m, nil
-			}
-			m.mode = modeSend
-			m.send.SetValue("")
-			m.send.Focus()
-			m.statusLine = fmt.Sprintf("send to %s", session.TmuxTarget)
-			return m, nil
 		case "ctrl+r":
 			session, ok := m.selected()
 			if !ok {
@@ -1038,8 +984,6 @@ func (m model) footerView() string {
 	switch m.mode {
 	case modeRename:
 		return "  " + m.rename.View()
-	case modeSend:
-		return "  " + m.send.View()
 	default:
 		return "  " + m.filter.View()
 	}
