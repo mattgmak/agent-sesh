@@ -14,10 +14,10 @@ type psProcess struct {
 	command string
 }
 
-// agentPresenceInProcessTrees reports which roots have a pi agent (piRoots) and
-// which have a pi-interactive-subagents launch script (subagentRoots) in their
-// descendant tree. One ps invocation covers every root.
-func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots, subagentRoots map[int]bool, err error) {
+// agentPresenceInProcessTrees reports the agent name each root has in its
+// descendant tree (piRoots) and which roots have a pi-interactive-subagents
+// launch script (subagentRoots). One ps invocation covers every root.
+func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots map[int]string, subagentRoots map[int]bool, err error) {
 	if len(roots) == 0 {
 		return nil, nil, nil
 	}
@@ -44,14 +44,16 @@ func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots, subagentRo
 		commands[proc.pid] = proc.command
 	}
 
-	piRoots = make(map[int]bool)
+	piRoots = make(map[int]string)
 	subagentRoots = make(map[int]bool)
 	for _, root := range roots {
 		if root <= 0 {
 			continue
 		}
-		if treeHasCommand(root, maxDepth, children, commands, isPiProcessLine) {
-			piRoots[root] = true
+		if command, ok := treeCommand(root, maxDepth, children, commands, isPiProcessLine); ok {
+			if name, ok := agentProcessName(command); ok {
+				piRoots[root] = name
+			}
 		}
 		if treeHasCommand(root, maxDepth, children, commands, isSubagentScriptLine) {
 			subagentRoots[root] = true
@@ -60,19 +62,26 @@ func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots, subagentRo
 	return piRoots, subagentRoots, nil
 }
 
-func treeHasCommand(pid, depth int, children map[int][]int, commands map[int]string, match func(string) bool) bool {
+// treeCommand walks a process tree to a depth and returns the first command line
+// the matcher accepts.
+func treeCommand(pid, depth int, children map[int][]int, commands map[int]string, match func(string) bool) (string, bool) {
 	if pid <= 0 || depth <= 0 {
-		return false
+		return "", false
 	}
-	if match(commands[pid]) {
-		return true
+	if command := commands[pid]; match(command) {
+		return command, true
 	}
 	for _, child := range children[pid] {
-		if treeHasCommand(child, depth-1, children, commands, match) {
-			return true
+		if command, ok := treeCommand(child, depth-1, children, commands, match); ok {
+			return command, true
 		}
 	}
-	return false
+	return "", false
+}
+
+func treeHasCommand(pid, depth int, children map[int][]int, commands map[int]string, match func(string) bool) bool {
+	_, ok := treeCommand(pid, depth, children, commands, match)
+	return ok
 }
 
 // subagentScriptMarker matches pi-interactive-subagents launch-script paths:

@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/mattgmak/agent-sesh/internal/config"
 	"github.com/mattgmak/agent-sesh/internal/registry"
 )
 
@@ -111,7 +112,7 @@ func buildMetaChunks(session registry.Session) []metaChunk {
 	}
 	agent := strings.TrimSpace(session.Agent)
 	if agent == "" {
-		agent = "pi"
+		agent = config.DefaultAgent
 	}
 
 	chunks := make([]metaChunk, 0, 10)

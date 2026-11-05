@@ -41,11 +41,26 @@ func TestCollectPiTTYs(t *testing.T) {
 		"?? /usr/bin/foo\n" +
 		"ttys006 /nix/store/abc-pi/bin/runner\n"
 	got := collectPiTTYs(out)
-	if !got["ttys004"] {
-		t.Fatal("expected ttys004 (bare pi) to be flagged")
+	if len(got) != 1 || got["ttys004"] != "pi" {
+		t.Fatalf("expected only ttys004=pi, got %v", got)
 	}
-	if got["ttys001"] || got["ttys005"] || got["ttys006"] {
-		t.Fatalf("unexpected pi ttys: %v", got)
+}
+
+func TestCollectPiTTYsLoadoutNames(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"agents":["pi-local","pi-stock"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AGENT_SESH_CONFIG", path)
+
+	out := "ttys002 /nix/store/x-pi-local/bin/pi-local --no-mcp\n" +
+		"ttys004 /usr/local/bin/pi\n"
+	got := collectPiTTYs(out)
+	if got["ttys002"] != "pi-local" {
+		t.Fatalf("collectPiTTYs() = %v, want ttys002=pi-local", got)
+	}
+	if _, ok := got["ttys004"]; ok {
+		t.Fatalf("collectPiTTYs() = %v, want pi absent when not configured", got)
 	}
 }
 
@@ -102,7 +117,7 @@ func TestRefreshSnapshotErrorPreservesCaches(t *testing.T) {
 	})
 
 	oldPiScanKey := "old-tty"
-	oldPiScanTTYs := map[string]bool{"old-tty": true}
+	oldPiScanTTYs := map[string]string{"old-tty": "pi"}
 	oldPiScanAt := time.Now()
 	piScanMu.Lock()
 	oldPiKey, oldPiTTYs, oldPiAt := piScanKey, piScanTTYs, piScanAt
@@ -132,7 +147,7 @@ printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' '%1' 'work' '2' '3' '/dev/ttys999' 'zs
 	}
 	piScanMu.Lock()
 	defer piScanMu.Unlock()
-	if piScanKey != oldPiScanKey || !piScanTTYs["old-tty"] || !piScanAt.Equal(oldPiScanAt) {
+	if piScanKey != oldPiScanKey || piScanTTYs["old-tty"] != "pi" || !piScanAt.Equal(oldPiScanAt) {
 		t.Fatalf("failed refresh changed pi scan cache: key=%q ttys=%v at=%v", piScanKey, piScanTTYs, piScanAt)
 	}
 }
@@ -258,7 +273,7 @@ func TestCachedPiAgentTTYsReuse(t *testing.T) {
 	// Pre-populate the cache as if a scan just ran for ttys004,ttys005.
 	piScanMu.Lock()
 	piScanKey = "ttys004,ttys005"
-	piScanTTYs = map[string]bool{"ttys004": true}
+	piScanTTYs = map[string]string{"ttys004": "pi"}
 	piScanAt = time.Now()
 	piScanMu.Unlock()
 
@@ -266,7 +281,7 @@ func TestCachedPiAgentTTYsReuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got["ttys004"] || got["ttys005"] {
+	if got["ttys004"] != "pi" || len(got) != 1 {
 		t.Fatalf("expected cached result reuse, got %v", got)
 	}
 

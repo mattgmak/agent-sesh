@@ -3,6 +3,7 @@ package tmux
 import (
 	"strings"
 
+	"github.com/mattgmak/agent-sesh/internal/config"
 	"github.com/mattgmak/agent-sesh/internal/registry"
 )
 
@@ -44,20 +45,32 @@ func paneExistsChecker(snap *Snapshot) func(string) bool {
 
 func hasAgentChecker(snap *Snapshot) func(string, string) bool {
 	return func(target, agent string) bool {
-		switch strings.TrimSpace(agent) {
-		case "", "pi":
-			target = strings.TrimSpace(target)
-			if target == "" {
-				return false
-			}
-			if snap != nil {
-				info, ok := snap.PaneInfo(target)
-				// Subagent surfaces run pi too; drop them from registry/counts.
-				return ok && info.HasPiAgent && !info.IsSubagent
-			}
-			return PaneHasPiAgent(target) && !PaneIsSubagent(target)
-		default:
+		agent = strings.TrimSpace(agent)
+		if agent == "" {
+			agent = config.DefaultAgent
+		}
+		// Only names the config lists can match, so an unknown agent never resolves.
+		if !config.IsAgent(agent) {
 			return false
 		}
+		target = strings.TrimSpace(target)
+		if target == "" {
+			return false
+		}
+		if snap != nil {
+			info, ok := snap.PaneInfo(target)
+			if !ok {
+				return false
+			}
+			// Snapshots written before the agents config have no agent name.
+			name := info.Agent
+			if name == "" {
+				name = config.DefaultAgent
+			}
+			// Subagent surfaces run pi too; drop them from registry/counts.
+			return info.HasPiAgent && name == agent && !info.IsSubagent
+		}
+		info := PaneInfoFor(target)
+		return info.Agent == agent && !info.IsSubagent
 	}
 }

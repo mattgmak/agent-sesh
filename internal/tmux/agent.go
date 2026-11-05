@@ -3,6 +3,8 @@ package tmux
 import (
 	"strconv"
 	"strings"
+
+	"github.com/mattgmak/agent-sesh/internal/config"
 )
 
 // PaneInfo is a snapshot of live tmux pane metadata used for validation/debugging.
@@ -19,6 +21,8 @@ type PaneInfo struct {
 	ShellPID       int
 	Exists         bool
 	HasPiAgent     bool
+	// Agent is the configured agent name the pane runs, empty when no agent runs there.
+	Agent string
 	// IsSubagent: pane runs a pi-interactive-subagents launch script
 	// (bash <...>/subagent-scripts/<name>-<id>.sh). Runs pi too, but must not
 	// surface as a pi session.
@@ -94,20 +98,26 @@ func PaneIsSubagent(target string) bool {
 }
 
 func paneHasPiOnTTY(target string) bool {
+	_, ok := paneAgentOnTTY(target)
+	return ok
+}
+
+// paneAgentOnTTY returns the agent name running on a pane's tty.
+func paneAgentOnTTY(target string) (string, bool) {
 	tty, err := PaneTTY(target)
 	if err != nil || tty == "" {
-		return false
+		return "", false
 	}
 	out, err := execOutput("ps.pane-tty", "ps", "-t", tty, "-o", "command=")
 	if err != nil {
-		return false
+		return "", false
 	}
 	for _, line := range strings.Split(string(out), "\n") {
-		if isPiProcessLine(line) {
-			return true
+		if name, ok := agentProcessName(line); ok {
+			return name, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // ttyBaseName strips the /dev prefix from a tmux pane_tty so it matches the
@@ -116,9 +126,9 @@ func ttyBaseName(tty string) string {
 	return strings.TrimPrefix(strings.TrimSpace(tty), "/dev/")
 }
 
-// piAgentTTYs scans the given ttys once and returns the set of ttys that have
-// a pi agent running on them.
-func piAgentTTYs(ttys []string) (map[string]bool, error) {
+// piAgentTTYs scans the given ttys once and returns the agent name each tty has
+// running on it.
+func piAgentTTYs(ttys []string) (map[string]string, error) {
 	if len(ttys) == 0 {
 		return nil, nil
 	}
@@ -129,8 +139,8 @@ func piAgentTTYs(ttys []string) (map[string]bool, error) {
 	return collectPiTTYs(string(out)), nil
 }
 
-func collectPiTTYs(psOutput string) map[string]bool {
-	ttys := make(map[string]bool)
+func collectPiTTYs(psOutput string) map[string]string {
+	agents := make(map[string]string)
 	for _, line := range strings.Split(psOutput, "\n") {
 		trimmed := strings.TrimLeft(line, " ")
 		if idx := strings.IndexByte(trimmed, ' '); idx > 0 {
@@ -138,15 +148,35 @@ func collectPiTTYs(psOutput string) map[string]bool {
 			if tty == "" || tty == "?" || tty == "??" {
 				continue
 			}
-			if isPiProcessLine(trimmed[idx+1:]) {
-				ttys[tty] = true
+			if name, ok := agentProcessName(trimmed[idx+1:]); ok {
+				agents[tty] = name
 			}
 		}
 	}
-	return ttys
+	return agents
 }
 
+// isPiProcessLine reports whether a ps command line runs a configured agent.
 func isPiProcessLine(line string) bool {
+	_, ok := agentProcessName(line)
+	return ok
+}
+
+// agentProcessName returns the configured agent name a ps command line runs.
+// Nix loadout wrappers name their process after the loadout (pi-local, pi-stock),
+// so the names come from config instead of a hardcoded pi.
+func agentProcessName(line string) (string, bool) {
+	for _, name := range config.Agents() {
+		if commandRuns(line, name) {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// commandRuns reports whether a command line executes the named binary. A line
+// that mentions lazygit never counts, because its preview helper shares the name.
+func commandRuns(line, name string) bool {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return false
@@ -155,13 +185,12 @@ func isPiProcessLine(line string) bool {
 		return false
 	}
 
-	fields := strings.Fields(line)
-	for _, field := range fields {
+	for _, field := range strings.Fields(line) {
 		base := field
 		if idx := strings.LastIndex(field, "/"); idx >= 0 {
 			base = field[idx+1:]
 		}
-		if base == "pi" {
+		if base == name {
 			return true
 		}
 	}
@@ -208,6 +237,9 @@ func PaneInfoForOpts(target string, knownPi bool) PaneInfo {
 		if cached, ok := snap.PaneInfo(info.Target); ok {
 			if knownPi {
 				cached.HasPiAgent = true
+				if cached.Agent == "" {
+					cached.Agent = config.DefaultAgent
+				}
 			}
 			return cached
 		}
@@ -235,8 +267,9 @@ func PaneInfoForOpts(target string, knownPi bool) PaneInfo {
 	info.CurrentPath = fields[7]
 	if knownPi {
 		info.HasPiAgent = true
+		info.Agent = config.DefaultAgent
 	} else {
-		info.HasPiAgent = detectPiAgent(info)
+		info.Agent, info.HasPiAgent = agentForPane(info)
 	}
 	info.IsSubagent = isSubagentScriptLine(info.StartCommand) || isSubagentScriptLine(info.CurrentCommand)
 	if !info.IsSubagent {

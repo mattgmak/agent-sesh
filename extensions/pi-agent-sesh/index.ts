@@ -22,6 +22,8 @@ const execFileAsync = promisify(execFile);
 
 /** Bound on tmux refresh-client; it must never hold a caller for long. */
 const refreshTimeoutMs = 1000;
+/** Loadout name this pi reports to agent-sesh. The wrapper sets pi-local or pi-stock. */
+const agentName = process.env.AGENT_SESH_AGENT_NAME ?? "pi";
 /** Branch lookups per worktree are reused briefly to skip a git exec per event. */
 const branchCacheMs = 5000;
 const branchCache = new Map<string, { branch?: string; at: number }>();
@@ -60,7 +62,7 @@ export interface AgentSeshSession {
 	model?: string;
 	subagents_running?: number;
 	bg_jobs_running?: number;
-	agent: "pi";
+	agent: string;
 	updated_at: string;
 }
 
@@ -577,7 +579,7 @@ export async function upsertSession(partial: {
 			model: partial.model ?? existing?.model,
 			subagents_running: existing?.subagents_running,
 			bg_jobs_running: existing?.bg_jobs_running,
-			agent: "pi",
+			agent: agentName,
 			updated_at: now,
 		};
 

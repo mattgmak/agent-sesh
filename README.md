@@ -66,9 +66,23 @@ nix run github:mattgmak/agent-sesh
     popupWidth = "90%";   # default "90%"
     popupHeight = "90%";  # default "90%"
     useFzf = false;       # set true for the fzf picker instead of the TUI
+    agents = [ "pi" ];    # every agent binary name the host runs
   };
 }
 ```
+
+`agents` lists the process names that count as agents. The module writes
+`~/.config/agent-sesh/config.json`, and agent-sesh matches pane commands against
+the list, so a host with loadout wrappers names each one:
+
+```nix
+agents = [ "pi" "pi-local" "pi-stock" ];
+```
+
+Each wrapper names its process with `exec -a pi-local` and exports
+`AGENT_SESH_AGENT_NAME`, so the pi extension writes the same name into its
+registry record. Set `AGENT_SESH_CONFIG` to read another file, or
+`AGENT_SESH_AGENTS` to override the list inline.
 
 ### tmux plugin (TPM-style)
 

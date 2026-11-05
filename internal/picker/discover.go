@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mattgmak/agent-sesh/internal/config"
 	"github.com/mattgmak/agent-sesh/internal/registry"
 	"github.com/mattgmak/agent-sesh/internal/tmux"
 )
@@ -36,7 +37,11 @@ func mergeDiscoveredSessions(registered []registry.Session, snap *tmux.Snapshot)
 		if _, ok := known[target]; ok {
 			continue
 		}
-		title := "pi session"
+		agent := info.Agent
+		if agent == "" {
+			agent = config.DefaultAgent
+		}
+		title := agent + " session"
 		if info.CurrentPath != "" {
 			title = info.CurrentPath
 		}
@@ -48,7 +53,7 @@ func mergeDiscoveredSessions(registered []registry.Session, snap *tmux.Snapshot)
 			TmuxPane:    info.PaneIndex,
 			CWD:         info.CurrentPath,
 			Title:       title,
-			Agent:       "pi",
+			Agent:       agent,
 			Status:      registry.StatusUnknown,
 		})
 	}

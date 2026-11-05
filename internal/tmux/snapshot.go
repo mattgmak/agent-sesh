@@ -39,7 +39,7 @@ var (
 
 	piScanMu   sync.Mutex
 	piScanKey  string
-	piScanTTYs map[string]bool
+	piScanTTYs map[string]string
 	piScanAt   time.Time
 
 	// refreshMu guards refreshInFlight so one scan runs at a time; callers that
@@ -134,7 +134,7 @@ func fetchSnapshot() (*Snapshot, error) {
 				info.ShellPID = pid
 			}
 		}
-		info.HasPiAgent = isPiCommand(info.CurrentCommand, info.StartCommand)
+		info.Agent, info.HasPiAgent = agentNameFromCommand(info.CurrentCommand, info.StartCommand)
 		if !info.HasPiAgent {
 			if tty := ttyBaseName(info.TTY); tty != "" {
 				scanTTYs[tty] = struct{}{}
@@ -160,10 +160,14 @@ func fetchSnapshot() (*Snapshot, error) {
 
 	for target, info := range panes {
 		if !info.HasPiAgent {
-			info.HasPiAgent = piTTYs[ttyBaseName(info.TTY)]
+			if name, ok := piTTYs[ttyBaseName(info.TTY)]; ok {
+				info.Agent, info.HasPiAgent = name, true
+			}
 		}
-		if !info.HasPiAgent && info.ShellPID > 0 && piRoots[info.ShellPID] {
-			info.HasPiAgent = true
+		if !info.HasPiAgent && info.ShellPID > 0 {
+			if name, ok := piRoots[info.ShellPID]; ok {
+				info.Agent, info.HasPiAgent = name, true
+			}
 		}
 		if info.ShellPID > 0 && subagentRoots[info.ShellPID] {
 			info.IsSubagent = true
@@ -256,11 +260,11 @@ func snapshotFilePath() (string, error) {
 	return filepath.Join(filepath.Dir(registryPath), snapshotFileName), nil
 }
 
-// cachedPiAgentTTYs returns the tty→pi map for the given ttys, reusing the
+// cachedPiAgentTTYs returns the tty→agent map for the given ttys, reusing the
 // previous ps scan when the tty set is unchanged and the result is still
 // fresh. Because ps carries a fixed ~20ms startup cost regardless of the
 // column requested, avoiding re-scans is the dominant optimization here.
-func cachedPiAgentTTYs(scanTTYs map[string]struct{}) (map[string]bool, error) {
+func cachedPiAgentTTYs(scanTTYs map[string]struct{}) (map[string]string, error) {
 	if len(scanTTYs) == 0 {
 		return nil, nil
 	}
@@ -286,19 +290,30 @@ func cachedPiAgentTTYs(scanTTYs map[string]struct{}) (map[string]bool, error) {
 	return result, nil
 }
 
-func detectPiAgent(info PaneInfo) bool {
-	if isPiCommand(info.CurrentCommand, info.StartCommand) {
-		return true
+// agentForPane returns the agent name a pane runs.
+//
+// The pane's foreground command may be the agent runtime (e.g. node for
+// pi) rather than `pi` itself, and the start command may be wrapped by
+// reattach-to-user-namespace or a login shell. The tty scan is the ground
+// truth: check every pane whose command doesn't already prove pi.
+func agentForPane(info PaneInfo) (string, bool) {
+	if name, ok := agentNameFromCommand(info.CurrentCommand, info.StartCommand); ok {
+		return name, true
 	}
-	// The pane's foreground command may be the agent runtime (e.g. node for
-	// pi) rather than `pi` itself, and the start command may be wrapped by
-	// reattach-to-user-namespace or a login shell. The tty scan is the ground
-	// truth: check every pane whose command doesn't already prove pi.
-	return paneHasPiOnTTY(info.Target)
+	return paneAgentOnTTY(info.Target)
+}
+
+// agentNameFromCommand returns the agent name a pane's current or start command runs.
+func agentNameFromCommand(current, start string) (string, bool) {
+	if name, ok := agentProcessName(current); ok {
+		return name, true
+	}
+	return agentProcessName(start)
 }
 
 func isPiCommand(current, start string) bool {
-	return isPiProcessLine(current) || isPiProcessLine(start)
+	_, ok := agentNameFromCommand(current, start)
+	return ok
 }
 
 // authoritative reports whether the snapshot is fresh enough to trust a

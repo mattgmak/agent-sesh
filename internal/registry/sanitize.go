@@ -3,6 +3,8 @@ package registry
 import (
 	"strings"
 	"time"
+
+	"github.com/mattgmak/agent-sesh/internal/config"
 )
 
 // PruneReason explains why a session was removed during Sanitize.
@@ -67,7 +69,7 @@ func Sanitize(sessions []Session, opts SanitizeOptions) ([]Session, []PruneReaso
 
 		agent := strings.TrimSpace(session.Agent)
 		if agent == "" {
-			agent = "pi"
+			agent = config.DefaultAgent
 		}
 		if opts.HasAgent != nil && !opts.HasAgent(target, agent) {
 			removed = append(removed, PruneReason{Session: session, Reason: "agent not running in pane"})

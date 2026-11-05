@@ -102,6 +102,18 @@
               '';
             };
             fzfPackage = lib.mkPackageOption pkgs "fzf" { nullable = true; };
+            agents = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ "pi" ];
+              example = [ "pi" "pi-local" "pi-stock" ];
+              description = ''
+                Process names that count as agents. agent-sesh matches pane
+                commands against them and labels each session with the name it
+                finds, so it must list every loadout wrapper on the host
+                (`pi-local`, `pi-stock`). A wrapper left out reads as no agent,
+                and the picker drops its sessions.
+              '';
+            };
           };
 
           config = lib.mkIf config.programs.agent-sesh.enable (
@@ -119,6 +131,13 @@
               ++ lib.optional (
                 config.programs.agent-sesh.useFzf && config.programs.agent-sesh.fzfPackage != null
               ) config.programs.agent-sesh.fzfPackage;
+
+              home.file.".config/agent-sesh/config.json".source = pkgs.writeText "agent-sesh-config.json" (
+                builtins.toJSON {
+                  version = 1;
+                  agents = config.programs.agent-sesh.agents;
+                }
+              );
 
               # Bind after plugins — plugin run-shell scripts can fail to register prefix binds during load.
               programs.tmux.extraConfig = lib.mkAfter (
