@@ -11,10 +11,16 @@ import (
 	"github.com/mattgmak/agent-sesh/internal/tmux"
 )
 
+// ListOptions controls the shape of the non-interactive output.
+type ListOptions struct {
+	// JSON emits registry rows as a JSON array instead of fzf items.
+	JSON bool
+}
+
 // List writes the fzf input: one NUL-separated item per session (fzf --read0
 // supports multiline items since 0.53), so each entry keeps its wrapped meta
 // rows and prompt line while remaining a single selectable candidate.
-func List(w io.Writer) error {
+func List(w io.Writer, opts ListOptions) error {
 	path, err := registry.DefaultPath()
 	if err != nil {
 		return err
@@ -24,28 +30,18 @@ func List(w io.Writer) error {
 		return err
 	}
 	sessions = sanitizeAndPersist(path, sessions)
+	if opts.JSON {
+		return WriteSessionsJSON(w, sessions)
+	}
 	_, err = io.WriteString(w, formatFzfInput(sessions))
 	return err
 }
 
 // Preview writes tmux capture-pane output for a session id or tmux target.
 func Preview(w io.Writer, key string) error {
-	path, err := registry.DefaultPath()
+	target, err := ResolveTarget(key)
 	if err != nil {
 		return err
-	}
-	sessions, err := registry.Load(path)
-	if err != nil {
-		return err
-	}
-
-	key = strings.TrimSpace(key)
-	target := key
-	for _, s := range sessions {
-		if s.ID == key || s.TmuxTarget == key || s.Title == key {
-			target = s.TmuxTarget
-			break
-		}
 	}
 	// fzf runs one process per preview call, so a process-local cache cannot
 	// hit here. Capture every time and let the caller see live pane text.
@@ -95,7 +91,6 @@ func RunFzf() error {
 	preview := fmt.Sprintf("%s preview {1}", self)
 	cmd := exec.Command(
 		"fzf",
-		"--tmux", "90%,90%",
 		"--no-sort",
 		"--ansi",
 		"--read0",
@@ -110,6 +105,13 @@ func RunFzf() error {
 		"--preview-window", "right:50%",
 		"--preview", preview,
 	)
+	// AGENT_SESH_FZF_WINDOW=inline fills the terminal instead of opening an
+	// fzf popup. The e2e harness sets it: a popup is a child window with a
+	// name the harness cannot predict, and an inline picker draws in the pane
+	// it runs in.
+	if os.Getenv("AGENT_SESH_FZF_WINDOW") != "inline" {
+		cmd.Args = append([]string{"fzf", "--tmux", "90%,90%"}, cmd.Args[1:]...)
+	}
 	cmd.Stdin = strings.NewReader(formatFzfInput(sessions))
 	cmd.Env = os.Environ()
 	cmd.Stderr = os.Stderr

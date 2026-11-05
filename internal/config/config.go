@@ -21,13 +21,58 @@ import (
 // DefaultAgent is the agent name agent-sesh assumes when nothing is configured.
 const DefaultAgent = "pi"
 
+// DefaultPort is the TCP port the daemon listens on when config omits one.
+const DefaultPort = 2270
+
+// defaultNotifyEvents lists the status changes that raise a notification when
+// config omits notify.events.
+var defaultNotifyEvents = []string{"awaiting_input", "idle"}
+
 // cacheTTL bounds how often a long-running picker re-reads the file.
 const cacheTTL = time.Second
 
 // Config holds the settings one agent-sesh run reads.
 type Config struct {
-	Version int      `json:"version"`
-	Agents  []string `json:"agents"`
+	Version int          `json:"version"`
+	Agents  []string     `json:"agents"`
+	Notify  NotifyConfig `json:"notify"`
+	Daemon  DaemonConfig `json:"daemon"`
+}
+
+// NotifyConfig controls event notifications. Enabled stays off until a config
+// turns it on, so an existing config.json gains no new side effect.
+type NotifyConfig struct {
+	Enabled bool `json:"enabled"`
+	// Backend is auto, osc, notify-send, osascript, command, or log.
+	Backend string `json:"backend,omitempty"`
+	// Command is the shell command for the command backend.
+	Command string `json:"command,omitempty"`
+	// TTY pins the terminal device for the osc backend.
+	TTY string `json:"tty,omitempty"`
+	// Events lists the statuses that notify. Empty uses defaultNotifyEvents.
+	Events []string `json:"events,omitempty"`
+}
+
+// DaemonConfig holds daemon settings.
+type DaemonConfig struct {
+	// Port is the TCP port the daemon listens on.
+	Port int `json:"port,omitempty"`
+}
+
+// Port returns the configured daemon port, or DefaultPort.
+func (c Config) Port() int {
+	if c.Daemon.Port > 0 {
+		return c.Daemon.Port
+	}
+	return DefaultPort
+}
+
+// EventList returns the notify events, or defaultNotifyEvents when unset.
+func (c Config) EventList() []string {
+	if events := normalize(c.Notify.Events); len(events) > 0 {
+		return events
+	}
+	return defaultNotifyEvents
 }
 
 var (
@@ -76,6 +121,8 @@ func Load() Config {
 	if agents := normalize(file.Agents); len(agents) > 0 {
 		cfg.Agents = agents
 	}
+	cfg.Notify = file.Notify
+	cfg.Daemon = file.Daemon
 	return cfg
 }
 

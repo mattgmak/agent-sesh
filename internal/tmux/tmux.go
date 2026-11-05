@@ -75,6 +75,63 @@ func SwitchClient(target string) error {
 	return execRun("tmux.switch-client", "tmux", "switch-client", "-t", target)
 }
 
+// SendKeys writes text into a pane. The text goes through -l, so tmux treats
+// it as literal characters instead of key names. With enter it submits the line.
+func SendKeys(target, text string, enter bool) error {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return fmt.Errorf("empty pane target")
+	}
+	if text == "" && !enter {
+		return nil
+	}
+	if text != "" {
+		if err := execRun("tmux.send-keys", "tmux", "send-keys", "-t", target, "-l", text); err != nil {
+			return err
+		}
+	}
+	if !enter {
+		return nil
+	}
+	return execRun("tmux.send-keys-enter", "tmux", "send-keys", "-t", target, "Enter")
+}
+
+// ClientTTYs lists the ttys of every client attached to the tmux server.
+func ClientTTYs() ([]string, error) {
+	out, err := execOutput("tmux.list-clients", "tmux", "list-clients", "-F", "#{client_tty}")
+	if err != nil {
+		return nil, err
+	}
+	var ttys []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			ttys = append(ttys, line)
+		}
+	}
+	return ttys, nil
+}
+
+// ClientTTY returns the tty of the client attached to target. With an empty
+// target it falls back to the first client of the server.
+func ClientTTY(target string) (string, error) {
+	if target = strings.TrimSpace(target); target != "" {
+		out, err := execOutput("tmux.client-tty", "tmux", "display-message", "-p", "-t", target, "#{client_tty}")
+		if err == nil {
+			if tty := strings.TrimSpace(string(out)); tty != "" {
+				return tty, nil
+			}
+		}
+	}
+	ttys, err := ClientTTYs()
+	if err != nil {
+		return "", err
+	}
+	if len(ttys) == 0 {
+		return "", fmt.Errorf("no tmux client attached")
+	}
+	return ttys[0], nil
+}
+
 func SessionName(target string) (string, error) {
 	out, err := execOutput("tmux.session-name", "tmux", "display-message", "-p", "-t", target, "#{session_name}")
 	if err != nil {
