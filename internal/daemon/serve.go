@@ -289,7 +289,7 @@ func Get(addr, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("GET http://%s%s: %w", addr, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		return nil, err
@@ -324,7 +324,7 @@ func (o Options) withDefaults(path string) Options {
 }
 
 func (s *Server) logf(format string, args ...any) {
-	fmt.Fprintf(s.opts.LogTo, "agent-sesh daemon: "+format+"\n", args...)
+	_, _ = fmt.Fprintf(s.opts.LogTo, "agent-sesh daemon: "+format+"\n", args...)
 }
 
 // Refresh re-reads the registry when its mtime moved and publishes one frame.
