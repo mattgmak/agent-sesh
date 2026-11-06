@@ -35,6 +35,17 @@ const (
 // capturePane is a test seam for the tmux capture call.
 var capturePane = tmux.CapturePane
 
+// paneWidthFor is the test seam for the pane column lookup that sizes the
+// preview. It returns 0 when no snapshot is available.
+var paneWidthFor = func(target string) int {
+	snap, err := tmux.GetSnapshot(false)
+	if err != nil {
+		return 0
+	}
+	width, _ := snap.PaneWidth(target)
+	return width
+}
+
 // Nerd Font codepoints (MDI from bin/scripts/lib/i_md.sh, FA from i_fa.sh).
 const (
 	iconUnknown          = "\U000F0625" // 󰘥 help-circle-outline
@@ -131,6 +142,7 @@ type model struct {
 	previewPending          string
 	previewName             string
 	previewTarget           string
+	previewPaneWidth        int
 	previewKey              uint64
 	previewSeq              int
 	loading                 bool
@@ -498,6 +510,7 @@ func (m *model) adoptCachedPreview(id, target string) {
 	}
 	m.previewSeq++
 	m.previewName, m.previewTarget = id, target
+	m.previewPaneWidth = paneWidthFor(target)
 	m.previewContent, m.previewErr, m.previewKey = content, nil, key
 }
 
@@ -1018,7 +1031,7 @@ func (m model) View() tea.View {
 	}
 
 	footer := m.footerView()
-	cols := previewCols(layoutWidth(m.width))
+	cols := previewColsFor(layoutWidth(m.width), m.previewPaneWidth)
 	var body string
 	if m.splitActive() && cols > 0 {
 		left := lipgloss.NewStyle().

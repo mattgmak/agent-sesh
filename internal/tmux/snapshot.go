@@ -23,7 +23,7 @@ const (
 	// snapshotFileName holds the last snapshot for short-lived processes such
 	// as the counts status line, which cannot reuse in-process memory.
 	snapshotFileName = "pane-snapshot.json"
-	paneListFormat   = "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}\t#{pane_pid}"
+	paneListFormat   = "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_tty}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_current_path}\t#{pane_pid}\t#{pane_width}"
 )
 
 // Snapshot is a cached tmux list-panes result used to avoid per-pane subprocess storms.
@@ -132,6 +132,11 @@ func fetchSnapshot() (*Snapshot, error) {
 		if len(fields) >= 9 {
 			if pid, err := strconv.Atoi(strings.TrimSpace(fields[8])); err == nil {
 				info.ShellPID = pid
+			}
+		}
+		if len(fields) >= 10 {
+			if width, err := strconv.Atoi(strings.TrimSpace(fields[9])); err == nil {
+				info.Width = width
 			}
 		}
 		info.Agent, info.HasPiAgent = agentNameFromCommand(info.CurrentCommand, info.StartCommand)
@@ -333,6 +338,18 @@ func (s *Snapshot) HasPane(target string) bool {
 	}
 	_, ok := s.panes[target]
 	return ok
+}
+
+// PaneWidth returns the column width recorded for a pane target.
+func (s *Snapshot) PaneWidth(target string) (int, bool) {
+	if s == nil {
+		return 0, false
+	}
+	info, ok := s.panes[strings.TrimSpace(target)]
+	if !ok || info.Width <= 0 {
+		return 0, false
+	}
+	return info.Width, true
 }
 
 // PaneInfo returns cached pane metadata when present.

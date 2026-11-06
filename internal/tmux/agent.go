@@ -19,6 +19,7 @@ type PaneInfo struct {
 	StartCommand   string
 	CurrentPath    string
 	ShellPID       int
+	Width          int
 	Exists         bool
 	HasPiAgent     bool
 	// Agent is the configured agent name the pane runs, empty when no agent runs there.

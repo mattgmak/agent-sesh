@@ -92,6 +92,21 @@ func previewCols(width int) int {
 	return cols
 }
 
+// previewColsFor sizes the preview column to the pane it shows. The column
+// matches the pane when the terminal has room, so a captured row never wraps or
+// truncates. A narrower terminal gives the preview its whole remaining width and
+// truncates instead. paneWidth 0 keeps the width-only heuristic.
+func previewColsFor(width, paneWidth int) int {
+	cols := previewCols(width)
+	if cols == 0 || paneWidth <= 0 {
+		return cols
+	}
+	if want := paneWidth + previewChrome(); want < cols {
+		cols = want
+	}
+	return cols
+}
+
 func contentWidth(totalWidth int) int {
 	w := totalWidth - previewCols(totalWidth)
 	if w < 30 {
