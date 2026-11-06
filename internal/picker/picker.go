@@ -668,7 +668,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.previewContent = msg.content
 		m.previewErr = msg.err
 		m.previewKey = key
-		return m, nil
+		// Without alt screen the renderer patches only changed cells, so the
+		// previous digits stay on screen beside the new ones. Force a full repaint.
+		return m, func() tea.Msg { return tea.ClearScreen() }
 
 	case previewRefreshMsg:
 		if msg.target != "" && msg.target == m.previewPending {
