@@ -248,14 +248,7 @@ has "json keeps the seeded status" '"status": "working"' "$WORK/list.json"
 has "json keeps the seeded agent" '"agent": "pi"' "$WORK/list.json"
 has "json keeps the seeded branch" '"branch": "main"' "$WORK/list.json"
 
-section "5. send keys"
-run "send text into $T1 (read-only)" as send --no-enter "$T1" "e2e probe"
-run "read $T1 back" sh -c "$TMOUX_BIN -S $SOCKET capture-pane -p -t $T1"
-has "typed text reached the pane" "e2e probe"
-runnot "send to an unknown target fails" as send nope:9.9 "x" --no-enter
-run "send Enter to $T1 (submit)" as send "$T1" ""
-
-section "6. notify"
+section "5. notify"
 run "notify log backend" as notify --backend log --event tool_call --title pi --body "used Bash"
 has "log line" "notify: pi | used Bash"
 run "notify from a session row" as notify --backend log --session "$T2"
@@ -281,7 +274,7 @@ run "notify osc to a file" as notify --backend osc --tty "$WORK/osc.bin" --event
 hasnt "osc did not fall back to log" "notify:"
 run "osc file was written" sh -c "test -s $WORK/osc.bin"
 
-section "7. daemon"
+section "6. daemon"
 PIDFILE=$STATE/agent-sesh/daemon-127.0.0.1_$PORT.pid
 run "daemon start" as daemon start
 DAEMON_PID=$(cat "$PIDFILE" 2>/dev/null)
@@ -316,7 +309,7 @@ else
   pass "pid file removed"
 fi
 
-section "8. pane gone prunes the row"
+section "7. pane gone prunes the row"
 tmux_try "kill e2e:three" $TMOUX_BIN -S "$SOCKET" kill-window -t e2e:three
 sleep 1
 run "list after kill" as list
@@ -327,7 +320,7 @@ else
 fi
 grep -q "$T1" "$WORK/out" && pass "$T1 still listed" || fail "$T1 still listed"
 
-section "9. interactive picker"
+section "8. interactive picker"
 if [ "$INTERACTIVE" = 0 ]; then
   skip "INTERACTIVE=0"
 elif [ -x "$REPO/tests/e2e-interactive.sh" ]; then

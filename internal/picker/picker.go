@@ -1053,6 +1053,24 @@ func (m model) View() tea.View {
 	}
 
 	view := tea.NewView(strings.TrimSuffix(body, "\n"))
-	view.BackgroundColor = m.bgColor
+	if p := os.Getenv("AGENT_SESH_DEBUG_LOG"); p != "" {
+		if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+			_, _ = fmt.Fprintf(f, "frame w=%d lines=%d split=%v cols=%d lw=%d items=%d plen=%d\n",
+				lipgloss.Width(view.Content), strings.Count(view.Content, "\n")+1, m.splitActive(),
+				cols, listWidth, len(m.displaySessions()), len(m.previewContent))
+			_ = f.Close()
+		}
+	}
+	// AGENT_SESH_DEBUG_FILE keeps the exact content of the newest frame so a
+	// test can compare the string the app built with the pane grid on screen.
+	if p := os.Getenv("AGENT_SESH_DEBUG_FILE"); p != "" {
+		_ = os.WriteFile(p, []byte(view.Content), 0o644)
+	}
+	// The renderer emits a background SGR only when View.BackgroundColor is set.
+	// A queried color paints the whole screen with that value, which differs from
+	// a tmux popup background, so the app sets it only when it is configured.
+	if m.bgColor != nil {
+		view.BackgroundColor = m.bgColor
+	}
 	return view
 }

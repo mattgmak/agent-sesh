@@ -137,6 +137,12 @@ func clipLines(text string, width, rows int) string {
 
 func clipLinesUncached(text string, width, rows int) string {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	// A capture always reports every row of the pane, so a sparse pane ends with
+	// blank rows. Drop them first: the tail slice would otherwise keep only those
+	// blanks and hide the last line that holds text.
+	for len(lines) > 1 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
 	if len(lines) > rows {
 		// Keep the tail (bottom) of the capture so the preview shows the
 		// agent TUI's full interface — status bar, tool output, input —

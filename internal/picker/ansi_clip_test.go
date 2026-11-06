@@ -84,6 +84,20 @@ func TestClipLinesMatchesLegacyPath(t *testing.T) {
 	}
 }
 
+func TestClipLinesDropsTrailingBlanks(t *testing.T) {
+	// A capture reports every row of the pane, so a pane with one line of output
+	// arrives as that line plus blank rows. The blank rows must not push the text
+	// out of the window.
+	resetRenderMemos()
+	if got := clipLines("PANE_ONE"+strings.Repeat("\n", 5), 80, 5); got != "PANE_ONE" {
+		t.Fatalf("clipLines() = %q, want %q", got, "PANE_ONE")
+	}
+	resetRenderMemos()
+	if got := clipLines("one\ntwo\n\n\n", 80, 5); got != "one\ntwo" {
+		t.Fatalf("clipLines() = %q, want %q", got, "one\ntwo")
+	}
+}
+
 func TestClipLinesZeroDims(t *testing.T) {
 	resetRenderMemos()
 	for _, tc := range []struct {

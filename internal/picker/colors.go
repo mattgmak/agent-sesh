@@ -30,7 +30,7 @@ var (
 	faintStyle = lipgloss.NewStyle().Faint(true)
 
 	// railThumbStyle paints the scrollbar thumb; dimStyle paints the track.
-	railThumbStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(7)).Bold(true)
+	railThumbStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(8)).Faint(true)
 )
 
 func initTerminalColors() {
