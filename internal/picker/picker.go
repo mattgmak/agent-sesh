@@ -229,18 +229,7 @@ func (m model) Init() tea.Cmd {
 		(&m).schedulePreviewLiveRefresh(),
 		m.loadSessionsAsync(),
 		m.schedulePreview(),
-		queryBackgroundColor,
 	)
-}
-
-// queryBackgroundColor asks the terminal for its real background. The answer
-// arrives as tea.BackgroundColorMsg and pins the painted background, so the
-// picker matches the terminal instead of drifting to a lighter tone.
-func queryBackgroundColor() tea.Msg {
-	if os.Getenv("AGENT_SESH_BG_COLOR") != "" {
-		return nil
-	}
-	return tea.RequestBackgroundColor()
 }
 
 // previewRefreshInterval picks the live poll cadence. A pending capture or a
@@ -640,11 +629,6 @@ func (m model) syncInputWidth() {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.BackgroundColorMsg:
-		if os.Getenv("AGENT_SESH_BG_COLOR") == "" {
-			m.bgColor = msg.Color
-		}
-		return m, nil
 	case previewLoadedMsg:
 		// Clear the pending slot for the captured pane even when the capture
 		// is stale, else a dropped capture blocks every later one.
@@ -1066,9 +1050,9 @@ func (m model) View() tea.View {
 	if p := os.Getenv("AGENT_SESH_DEBUG_FILE"); p != "" {
 		_ = os.WriteFile(p, []byte(view.Content), 0o644)
 	}
-	// The renderer emits a background SGR only when View.BackgroundColor is set.
-	// A queried color paints the whole screen with that value, which differs from
-	// a tmux popup background, so the app sets it only when it is configured.
+	// A non-nil background makes the renderer emit an OSC 11 set, which recolors
+	// the whole pane or popup. The terminal answer differs from a tmux popup
+	// style, so only AGENT_SESH_BG_COLOR sets it and the app inherits the rest.
 	if m.bgColor != nil {
 		view.BackgroundColor = m.bgColor
 	}
