@@ -34,33 +34,83 @@ func TestTtyBaseName(t *testing.T) {
 	}
 }
 
-func TestCollectPiTTYs(t *testing.T) {
-	out := "ttys001 /bin/ls\n" +
-		"ttys004 /usr/local/bin/pi\n" +
-		"ttys005 nu\n" +
-		"?? /usr/bin/foo\n" +
-		"ttys006 /nix/store/abc-pi/bin/runner\n"
-	got := collectPiTTYs(out)
+func TestPeekSnapshot(t *testing.T) {
+	snapshotMu.Lock()
+	old := snapshotCache
+	snapshotMu.Unlock()
+	t.Cleanup(func() {
+		snapshotMu.Lock()
+		snapshotCache = old
+		snapshotMu.Unlock()
+	})
+
+	snapshotMu.Lock()
+	snapshotCache = nil
+	snapshotMu.Unlock()
+	if _, ok := PeekSnapshot(); ok {
+		t.Fatal("PeekSnapshot() ok = true with no cache, want false")
+	}
+
+	stale := &Snapshot{fetchedAt: time.Now().Add(-time.Hour)}
+	snapshotMu.Lock()
+	snapshotCache = stale
+	snapshotMu.Unlock()
+	if got, ok := PeekSnapshot(); !ok || got != stale {
+		t.Fatalf("PeekSnapshot() = (%v, %v), want the stale snapshot", got, ok)
+	}
+}
+
+func TestPiAgentTTYs(t *testing.T) {
+	procs := []psProcess{
+		{pid: 1, ppid: 1, tty: "ttys001", command: "/bin/ls"},
+		{pid: 2, ppid: 1, tty: "ttys004", command: "/usr/local/bin/pi"},
+		{pid: 3, ppid: 1, tty: "ttys005", command: "nu"},
+		{pid: 4, ppid: 1, tty: "??", command: "/usr/bin/foo"},
+		{pid: 5, ppid: 1, tty: "ttys006", command: "/nix/store/abc-pi/bin/runner"},
+	}
+	got := piAgentTTYs(procs, []string{"ttys001", "ttys004", "ttys005", "??", "ttys006"})
 	if len(got) != 1 || got["ttys004"] != "pi" {
 		t.Fatalf("expected only ttys004=pi, got %v", got)
 	}
 }
 
-func TestCollectPiTTYsLoadoutNames(t *testing.T) {
+func TestPiAgentTTYsLoadoutNames(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	if err := os.WriteFile(path, []byte(`{"version":1,"agents":["pi-local","pi-stock"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("AGENT_SESH_CONFIG", path)
 
-	out := "ttys002 /nix/store/x-pi-local/bin/pi-local --no-mcp\n" +
-		"ttys004 /usr/local/bin/pi\n"
-	got := collectPiTTYs(out)
+	procs := []psProcess{
+		{pid: 1, ppid: 1, tty: "ttys002", command: "/nix/store/x-pi-local/bin/pi-local --no-mcp"},
+		{pid: 2, ppid: 1, tty: "ttys004", command: "/usr/local/bin/pi"},
+	}
+	got := piAgentTTYs(procs, []string{"ttys002", "ttys004"})
 	if got["ttys002"] != "pi-local" {
-		t.Fatalf("collectPiTTYs() = %v, want ttys002=pi-local", got)
+		t.Fatalf("piAgentTTYs() = %v, want ttys002=pi-local", got)
 	}
 	if _, ok := got["ttys004"]; ok {
-		t.Fatalf("collectPiTTYs() = %v, want pi absent when not configured", got)
+		t.Fatalf("piAgentTTYs() = %v, want pi absent when not configured", got)
+	}
+}
+
+func TestParsePSProcessList(t *testing.T) {
+	out := "  1 1 ? /sbin/launchd\n" +
+		"42 1 ttys004 /usr/local/bin/pi --no-mcp\n" +
+		"garbage line\n" +
+		"43 1 ttys005\n"
+	procs, err := parsePSProcessList(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(procs) != 2 {
+		t.Fatalf("parsePSProcessList() = %+v, want 2 rows", procs)
+	}
+	if procs[1].pid != 42 || procs[1].ppid != 1 || procs[1].tty != "ttys004" {
+		t.Fatalf("parsePSProcessList() row 1 = %+v", procs[1])
+	}
+	if procs[1].command != "/usr/local/bin/pi --no-mcp" {
+		t.Fatalf("parsePSProcessList() row 1 command = %q", procs[1].command)
 	}
 }
 
@@ -91,13 +141,11 @@ func TestPiPanesFilters(t *testing.T) {
 }
 
 func TestCachedPiAgentTTYsEmpty(t *testing.T) {
-	got, err := cachedPiAgentTTYs(nil)
-	if err != nil || got != nil {
-		t.Fatalf("nil set = (%v, %v), want (nil, nil)", got, err)
+	if got := cachedPiAgentTTYs(nil, nil); got != nil {
+		t.Fatalf("nil set = %v, want nil", got)
 	}
-	got, err = cachedPiAgentTTYs(map[string]struct{}{})
-	if err != nil || got != nil {
-		t.Fatalf("empty set = (%v, %v), want (nil, nil)", got, err)
+	if got := cachedPiAgentTTYs(nil, map[string]struct{}{}); got != nil {
+		t.Fatalf("empty set = %v, want nil", got)
 	}
 }
 
@@ -277,10 +325,7 @@ func TestCachedPiAgentTTYsReuse(t *testing.T) {
 	piScanAt = time.Now()
 	piScanMu.Unlock()
 
-	got, err := cachedPiAgentTTYs(map[string]struct{}{"ttys004": {}, "ttys005": {}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := cachedPiAgentTTYs(nil, map[string]struct{}{"ttys004": {}, "ttys005": {}})
 	if got["ttys004"] != "pi" || len(got) != 1 {
 		t.Fatalf("expected cached result reuse, got %v", got)
 	}

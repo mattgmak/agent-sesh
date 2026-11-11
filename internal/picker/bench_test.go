@@ -87,6 +87,18 @@ func BenchmarkPickerView200x50(b *testing.B) {
 	}
 }
 
+// BenchmarkPickerFrameRender200x50 measures the render on its own, past the
+// frame cache, so the number stays comparable across cache changes.
+func BenchmarkPickerFrameRender200x50(b *testing.B) {
+	m := benchPickerModel()
+	footer := m.footerView()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = m.renderFrame(footer)
+	}
+}
+
 func BenchmarkPickerNavKey200x50(b *testing.B) {
 	m := benchPickerModel()
 	msg := tea.KeyPressMsg{Code: tea.KeyTab}

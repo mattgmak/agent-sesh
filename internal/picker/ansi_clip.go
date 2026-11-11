@@ -117,6 +117,7 @@ func (m *renderMemo) reset() {
 func resetRenderMemos() {
 	clipMemo.reset()
 	paneMemo.reset()
+	frameCache.reset()
 }
 
 // clipLines clips captured pane text to width x rows. Results are memoised per

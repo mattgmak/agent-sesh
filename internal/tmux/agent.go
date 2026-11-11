@@ -127,31 +127,23 @@ func ttyBaseName(tty string) string {
 	return strings.TrimPrefix(strings.TrimSpace(tty), "/dev/")
 }
 
-// piAgentTTYs scans the given ttys once and returns the agent name each tty has
-// running on it.
-func piAgentTTYs(ttys []string) (map[string]string, error) {
-	if len(ttys) == 0 {
-		return nil, nil
+// piAgentTTYs returns the agent name each given tty has running on it, taken
+// from a ps listing.
+func piAgentTTYs(procs []psProcess, ttys []string) map[string]string {
+	want := make(map[string]struct{}, len(ttys))
+	for _, tty := range ttys {
+		want[tty] = struct{}{}
 	}
-	out, err := execOutput("ps.tty-scan", "ps", "-t", strings.Join(ttys, ","), "-o", "tty=,command=")
-	if err != nil {
-		return nil, err
-	}
-	return collectPiTTYs(string(out)), nil
-}
-
-func collectPiTTYs(psOutput string) map[string]string {
-	agents := make(map[string]string)
-	for _, line := range strings.Split(psOutput, "\n") {
-		trimmed := strings.TrimLeft(line, " ")
-		if idx := strings.IndexByte(trimmed, ' '); idx > 0 {
-			tty := trimmed[:idx]
-			if tty == "" || tty == "?" || tty == "??" {
-				continue
-			}
-			if name, ok := agentProcessName(trimmed[idx+1:]); ok {
-				agents[tty] = name
-			}
+	agents := make(map[string]string, len(ttys))
+	for _, proc := range procs {
+		if proc.tty == "" || proc.tty == "?" || proc.tty == "??" {
+			continue
+		}
+		if _, ok := want[proc.tty]; !ok {
+			continue
+		}
+		if name, ok := agentProcessName(proc.command); ok {
+			agents[proc.tty] = name
 		}
 	}
 	return agents

@@ -16,9 +16,9 @@ import (
 
 const (
 	defaultSnapshotTTL = 10 * time.Second
-	// piScanTTL bounds how stale the tty→pi detection result may get when the
-	// set of ttys to scan is unchanged. ps has a fixed ~20ms startup cost on
-	// macOS, so this cache avoids re-paying it on every snapshot refresh.
+	// piScanTTL bounds how stale the tty→pi map may get when the set of ttys to
+	// scan is unchanged. The ps listing itself now comes from scanProcesses, one
+	// fork per fetch, so this cache only skips rebuilding the derived map.
 	piScanTTL = 15 * time.Second
 	// snapshotFileName holds the last snapshot for short-lived processes such
 	// as the counts status line, which cannot reuse in-process memory.
@@ -74,6 +74,16 @@ func GetSnapshot(force bool) (*Snapshot, error) {
 	}
 	snapshotMu.Unlock()
 	return refreshSnapshot()
+}
+
+// PeekSnapshot returns the cached snapshot whatever its age, and never starts a
+// scan. Callers that only decorate the screen use it so a stale cache cannot put
+// a tmux exec on the UI path; the scan stays with GetSnapshot callers.
+func PeekSnapshot() (snap *Snapshot, ok bool) {
+	snapshotMu.Lock()
+	snap, ok = snapshotCache, snapshotCache != nil
+	snapshotMu.Unlock()
+	return snap, ok
 }
 
 // refreshSnapshot runs the pane scan single-flight: concurrent callers wait for
@@ -151,17 +161,18 @@ func fetchSnapshot() (*Snapshot, error) {
 		panes[target] = info
 	}
 
-	// One scoped `ps -t` scan covering only the pane ttys whose command didn't
-	// already prove pi, instead of a full-system `ps -e` scan. The result is
-	// cached by tty set (see cachedPiAgentTTYs).
-	piTTYs, err := cachedPiAgentTTYs(scanTTYs)
-	if err != nil {
-		return nil, err
+	// One ps fork feeds both lookups: the tty→agent map for the pane ttys whose
+	// command did not already prove pi, and the process trees under each shell pid.
+	// Every pane already names its agent, so both sets are empty and no ps runs.
+	var procs []psProcess
+	if len(scanTTYs) > 0 || len(checkPIDs) > 0 {
+		procs, err = scanProcesses()
+		if err != nil {
+			return nil, err
+		}
 	}
-	piRoots, subagentRoots, err := agentPresenceInProcessTrees(checkPIDs, defaultProcessTreeDepth)
-	if err != nil {
-		return nil, err
-	}
+	piTTYs := cachedPiAgentTTYs(procs, scanTTYs)
+	piRoots, subagentRoots := agentPresenceInProcessTrees(procs, checkPIDs, defaultProcessTreeDepth)
 
 	for target, info := range panes {
 		if !info.HasPiAgent {
@@ -266,12 +277,10 @@ func snapshotFilePath() (string, error) {
 }
 
 // cachedPiAgentTTYs returns the tty→agent map for the given ttys, reusing the
-// previous ps scan when the tty set is unchanged and the result is still
-// fresh. Because ps carries a fixed ~20ms startup cost regardless of the
-// column requested, avoiding re-scans is the dominant optimization here.
-func cachedPiAgentTTYs(scanTTYs map[string]struct{}) (map[string]string, error) {
+// previous result while the tty set is unchanged and the result is still fresh.
+func cachedPiAgentTTYs(procs []psProcess, scanTTYs map[string]struct{}) map[string]string {
 	if len(scanTTYs) == 0 {
-		return nil, nil
+		return nil
 	}
 	ttys := make([]string, 0, len(scanTTYs))
 	for tty := range scanTTYs {
@@ -283,16 +292,10 @@ func cachedPiAgentTTYs(scanTTYs map[string]struct{}) (map[string]string, error) 
 	piScanMu.Lock()
 	defer piScanMu.Unlock()
 	if piScanKey == key && time.Since(piScanAt) < piScanTTL {
-		return piScanTTYs, nil
+		return piScanTTYs
 	}
-	result, err := piAgentTTYs(ttys)
-	if err != nil {
-		return nil, err
-	}
-	piScanKey = key
-	piScanTTYs = result
-	piScanAt = time.Now()
-	return result, nil
+	piScanKey, piScanTTYs, piScanAt = key, piAgentTTYs(procs, ttys), time.Now()
+	return piScanTTYs
 }
 
 // agentForPane returns the agent name a pane runs.

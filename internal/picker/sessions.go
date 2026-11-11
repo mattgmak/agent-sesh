@@ -69,8 +69,9 @@ func reloadRegistry(path string, current []registry.Session) ([]registry.Session
 
 func reloadDiscovery(path string, current []registry.Session) ([]registry.Session, error) {
 	defer profileStart("reloadDiscovery")()
-	tmux.InvalidateSnapshot()
-	snap, err := tmux.GetSnapshot(true)
+	// The 3s registry tick keeps the snapshot inside its TTL, so a forced rescan
+	// here drops a snapshot seconds old and pays a second tmux scan for it.
+	snap, err := tmux.GetSnapshot(false)
 	if err != nil {
 		return current, err
 	}

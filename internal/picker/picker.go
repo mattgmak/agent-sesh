@@ -36,10 +36,11 @@ const (
 var capturePane = tmux.CapturePane
 
 // paneWidthFor is the test seam for the pane column lookup that sizes the
-// preview. It returns 0 when no snapshot is available.
+// preview. It returns 0 when no snapshot is available. It peeks instead of
+// refreshing so a stale cache never blocks Update on a tmux exec.
 var paneWidthFor = func(target string) int {
-	snap, err := tmux.GetSnapshot(false)
-	if err != nil {
+	snap, ok := tmux.PeekSnapshot()
+	if !ok {
 		return 0
 	}
 	width, _ := snap.PaneWidth(target)
@@ -1004,6 +1005,27 @@ func (m model) View() tea.View {
 		return tea.NewView("Loading...")
 	}
 
+	footer := m.footerView()
+	inputs := m.frameInputsFor(footer)
+	content, ok := frameCache.get(inputs)
+	if !ok {
+		content = m.renderFrame(footer)
+		frameCache.put(inputs, content)
+	}
+
+	view := tea.NewView(content)
+	m.logFrame(view, inputs)
+	// A non-nil background makes the renderer emit an OSC 11 set, which recolors
+	// the whole pane or popup. The terminal answer differs from a tmux popup
+	// style, so only AGENT_SESH_BG_COLOR sets it and the app inherits the rest.
+	if m.bgColor != nil {
+		view.BackgroundColor = m.bgColor
+	}
+	return view
+}
+
+// renderFrame builds the frame body from the list, the footer and the preview.
+func (m model) renderFrame(footer string) string {
 	visible := visibleCount(layoutHeight(m.height))
 	listWidth := m.contentWidth()
 	items := m.displaySessions()
@@ -1032,7 +1054,6 @@ func (m model) View() tea.View {
 		)
 	}
 
-	footer := m.footerView()
 	cols := previewColsFor(layoutWidth(m.width), m.previewPaneWidth)
 	var body string
 	if m.splitActive() && cols > 0 {
@@ -1051,12 +1072,18 @@ func (m model) View() tea.View {
 		body = strings.TrimSuffix(listBody, "\n") + "\n\n" + footer
 	}
 
-	view := tea.NewView(strings.TrimSuffix(body, "\n"))
+	return strings.TrimSuffix(body, "\n")
+}
+
+// logFrame writes the debug artefacts a test or the frame checker asks for. The
+// inputs carry the frame numbers, so a cached frame logs the same line.
+func (m model) logFrame(view tea.View, inputs frameInputs) {
 	if p := os.Getenv("AGENT_SESH_DEBUG_LOG"); p != "" {
 		if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			_, _ = fmt.Fprintf(f, "frame w=%d lines=%d split=%v cols=%d lw=%d items=%d plen=%d\n",
 				lipgloss.Width(view.Content), strings.Count(view.Content, "\n")+1, m.splitActive(),
-				cols, listWidth, len(m.displaySessions()), len(m.previewContent))
+				previewColsFor(layoutWidth(m.width), inputs.previewPane), m.contentWidth(),
+				len(m.displaySessions()), len(inputs.preview))
 			_ = f.Close()
 		}
 	}
@@ -1065,11 +1092,4 @@ func (m model) View() tea.View {
 	if p := os.Getenv("AGENT_SESH_DEBUG_FILE"); p != "" {
 		_ = os.WriteFile(p, []byte(view.Content), 0o644)
 	}
-	// A non-nil background makes the renderer emit an OSC 11 set, which recolors
-	// the whole pane or popup. The terminal answer differs from a tmux popup
-	// style, so only AGENT_SESH_BG_COLOR sets it and the app inherits the rest.
-	if m.bgColor != nil {
-		view.BackgroundColor = m.bgColor
-	}
-	return view
 }

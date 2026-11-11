@@ -11,35 +11,42 @@ const defaultProcessTreeDepth = 5
 type psProcess struct {
 	pid     int
 	ppid    int
+	tty     string
 	command string
+}
+
+// scanProcesses runs the one ps listing every pane lookup needs. The rows carry
+// pid, ppid, tty and command, so the tty map and the process trees share one
+// fork instead of each paying its own.
+func scanProcesses() ([]psProcess, error) {
+	out, err := execOutput("ps.process-list", "ps", "-ax", "-o", "pid=,ppid=,tty=,command=")
+	if err != nil {
+		return nil, err
+	}
+	procs, err := parsePSProcessList(string(out))
+	if err != nil {
+		return nil, fmt.Errorf("parse ps process list: %w", err)
+	}
+	if len(procs) == 0 {
+		return nil, fmt.Errorf("parse ps process list: no processes")
+	}
+	return procs, nil
 }
 
 // agentPresenceInProcessTrees reports the agent name each root has in its
 // descendant tree (piRoots) and which roots have a pi-interactive-subagents
 // launch script (subagentRoots). One ps invocation covers every root.
-func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots map[int]string, subagentRoots map[int]bool, err error) {
+func agentPresenceInProcessTrees(procs []psProcess, roots []int, maxDepth int) (piRoots map[int]string, subagentRoots map[int]bool) {
 	if len(roots) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
 	if maxDepth <= 0 {
 		maxDepth = defaultProcessTreeDepth
 	}
 
-	out, err := execOutput("ps.process-list", "ps", "-ax", "-o", "pid=,ppid=,command=")
-	if err != nil {
-		return nil, nil, err
-	}
-	processes, err := parsePSProcessList(string(out))
-	if err != nil {
-		return nil, nil, fmt.Errorf("parse ps process list: %w", err)
-	}
-	if len(processes) == 0 {
-		return nil, nil, fmt.Errorf("parse ps process list: no processes")
-	}
-
-	children := make(map[int][]int, len(processes))
-	commands := make(map[int]string, len(processes))
-	for _, proc := range processes {
+	children := make(map[int][]int, len(procs))
+	commands := make(map[int]string, len(procs))
+	for _, proc := range procs {
 		children[proc.ppid] = append(children[proc.ppid], proc.pid)
 		commands[proc.pid] = proc.command
 	}
@@ -59,7 +66,7 @@ func agentPresenceInProcessTrees(roots []int, maxDepth int) (piRoots map[int]str
 			subagentRoots[root] = true
 		}
 	}
-	return piRoots, subagentRoots, nil
+	return piRoots, subagentRoots
 }
 
 // treeCommand walks a process tree to a depth and returns the first command line
@@ -104,7 +111,7 @@ func parsePSProcessList(output string) ([]psProcess, error) {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) < 3 {
+		if len(fields) < 4 {
 			continue
 		}
 		pid, err := strconv.Atoi(fields[0])
@@ -118,7 +125,8 @@ func parsePSProcessList(output string) ([]psProcess, error) {
 		out = append(out, psProcess{
 			pid:     pid,
 			ppid:    ppid,
-			command: strings.Join(fields[2:], " "),
+			tty:     fields[2],
+			command: strings.Join(fields[3:], " "),
 		})
 	}
 	return out, nil
