@@ -22,10 +22,11 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         version = "0.1.0";
+        goSrc = pkgs.lib.sourceFilesBySuffices self [ ".go" ".s" "go.mod" "go.sum" "modules.txt" ];
         agent-sesh = pkgs.buildGoModule {
           pname = "agent-sesh";
           inherit version;
-          src = self;
+          src = goSrc;
           vendorHash = null;
           ldflags = [
             "-X"
