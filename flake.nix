@@ -34,6 +34,25 @@
           ];
           meta.mainProgram = "agent-sesh";
         };
+        agent-sesh-rust-bin = pkgs.rustPlatform.buildRustPackage {
+          pname = "agent-sesh-rust";
+          inherit version;
+          src = pkgs.lib.cleanSource (self + "/rust");
+          sourceRoot = "source/app";
+          cargoLock.lockFile = ./rust/app/Cargo.lock;
+          # .cargo/config.toml's build.linker is ignored by cargo; set the linker env directly.
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "${pkgs.stdenv.cc}/bin/${pkgs.stdenv.cc.targetPrefix}cc";
+          # version-rs stamps the binary via option_env!("AGENT_SESH_VERSION").
+          AGENT_SESH_VERSION = version;
+          # Replay harness (app-cases) is the real test; unit tests need a live tmux.
+          doCheck = false;
+          meta.mainProgram = "agent-sesh";
+        };
+        # Shadow wrapper: fallback commands exec the Go binary instead of the replay run.sh.
+        agent-sesh-rust = pkgs.writeShellScriptBin "agent-sesh" ''
+          export RUST_ANYTHING_RUN="${pkgs.lib.getExe agent-sesh}"
+          exec "${pkgs.lib.getExe agent-sesh-rust-bin}" "$@"
+        '';
         tmuxPlugin = pkgs.tmuxPlugins.mkTmuxPlugin {
           pluginName = "agent-sesh";
           inherit version;
@@ -49,6 +68,7 @@
         packages = {
           default = agent-sesh;
           inherit agent-sesh;
+          inherit agent-sesh-rust;
           agent-sesh-tmux = tmuxPlugin;
         };
 
