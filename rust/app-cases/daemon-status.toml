@@ -1,0 +1,4 @@
+bin.name = "agent-sesh"
+args = ["daemon", "status"]
+status.code = 1
+fs.sandbox = true

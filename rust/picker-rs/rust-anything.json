@@ -1,0 +1,84 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/home/agent/hermes/.hermes/kanban/workspaces/t_5774d5c5/agent-sesh",
+  "unit": "internal/picker/",
+  "language": "go",
+  "kind": "ffi",
+  "crate_name": "picker-rs",
+  "exports": [
+    {
+      "name": "RunFzf",
+      "file": "internal/picker/fzf.go",
+      "line": 57,
+      "params": [],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func RunFzf() error"
+    },
+    {
+      "name": "ResolveTarget",
+      "file": "internal/picker/list.go",
+      "line": 37,
+      "params": [
+        {
+          "name": "key",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func ResolveTarget(key string) (string, error)"
+    },
+    {
+      "name": "Run",
+      "file": "internal/picker/picker.go",
+      "line": 161,
+      "params": [],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func Run() error"
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "List",
+      "file": "internal/picker/fzf.go",
+      "line": 23,
+      "reason": "uses `io.Writer` from another package"
+    },
+    {
+      "name": "Preview",
+      "file": "internal/picker/fzf.go",
+      "line": 41,
+      "reason": "uses `io.Writer` from another package"
+    },
+    {
+      "name": "Lookup",
+      "file": "internal/picker/list.go",
+      "line": 14,
+      "reason": "uses `registry.Session` from another package"
+    },
+    {
+      "name": "WriteSessionsJSON",
+      "file": "internal/picker/list.go",
+      "line": 53,
+      "reason": "uses `io.Writer` from another package"
+    }
+  ]
+}

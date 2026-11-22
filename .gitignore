@@ -1,6 +1,11 @@
 # Binaries
 /agent-sesh
 /result
+/bin/
+.sgr_probe_main.go
+
+# Rust build dirs
+rust/**/target/
 
 # Node (pi extension typecheck deps)
 node_modules/

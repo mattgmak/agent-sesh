@@ -1,0 +1,4 @@
+bin.name = "agent-sesh"
+args = ["notify", "--backend", "log", "--session", "%0"]
+status.code = 0
+fs.sandbox = true

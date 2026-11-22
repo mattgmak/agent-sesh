@@ -1,0 +1,4 @@
+bin.name = "agent-sesh"
+args = ["daemon", "👨‍👩‍👧 family"]
+status.code = 2
+fs.sandbox = true

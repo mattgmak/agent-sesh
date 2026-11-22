@@ -1,0 +1,60 @@
+{
+  "schema": "rust-anything/front-door@1",
+  "name": "agent-sesh",
+  "commands": [
+    "counts",
+    "debug",
+    "list",
+    "notify",
+    "preview",
+    "version"
+  ],
+  "units": [
+    {
+      "name": "version",
+      "crate": "version-rs",
+      "path": "../version-rs",
+      "commands": [
+        "version"
+      ],
+      "switch": "RUST_ANYTHING_UNIT_VERSION"
+    },
+    {
+      "name": "notify",
+      "crate": "notify-rs",
+      "path": "../notify-rs",
+      "commands": [
+        "notify"
+      ],
+      "switch": "RUST_ANYTHING_UNIT_NOTIFY"
+    },
+    {
+      "name": "debug",
+      "crate": "debug-rs",
+      "path": "../debug-rs",
+      "commands": [
+        "debug"
+      ],
+      "switch": "RUST_ANYTHING_UNIT_DEBUG"
+    },
+    {
+      "name": "counts",
+      "crate": "counts-rs",
+      "path": "../counts-rs",
+      "commands": [
+        "counts"
+      ],
+      "switch": "RUST_ANYTHING_UNIT_COUNTS"
+    },
+    {
+      "name": "picker",
+      "crate": "picker-rs",
+      "path": "../picker-rs",
+      "commands": [
+        "preview",
+        "list"
+      ],
+      "switch": "RUST_ANYTHING_UNIT_PICKER"
+    }
+  ]
+}

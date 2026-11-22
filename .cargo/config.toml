@@ -1,0 +1,2 @@
+[build]
+linker = "/nix/store/6acdqwm0v0m7chiip5bcl0f9j811mpmj-bootstrap-stage4-gcc-wrapper-16.2.0/bin/cc"

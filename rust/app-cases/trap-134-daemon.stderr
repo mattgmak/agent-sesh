@@ -1,0 +1,1 @@
+usage: agent-sesh daemon [start|stop|status|serve] [--addr A] [--registry P] [--notify]

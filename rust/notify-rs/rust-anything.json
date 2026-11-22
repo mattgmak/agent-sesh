@@ -1,0 +1,145 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/home/agent/hermes/.hermes/kanban/workspaces/t_5774d5c5/agent-sesh",
+  "unit": "internal/notify/",
+  "language": "go",
+  "kind": "ffi",
+  "crate_name": "notify-rs",
+  "exports": [
+    {
+      "name": "Resolve",
+      "file": "internal/notify/notify.go",
+      "line": 108,
+      "params": [
+        {
+          "name": "explicit",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        },
+        {
+          "name": "env",
+          "ts_type": "{ GOOS: string; OSAScript: boolean; NotifySend: boolean; DBUSSet: boolean; DisplaySet: boolean; InTmux: boolean; HasTTY: boolean; HasCommand: boolean; HasStdoutOK: boolean }",
+          "optional": false,
+          "rest": false,
+          "native_type": "Env"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func Resolve(explicit string, env Env) (string, error)"
+    },
+    {
+      "name": "OSCSequence",
+      "file": "internal/notify/notify.go",
+      "line": 147,
+      "params": [
+        {
+          "name": "title",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        },
+        {
+          "name": "body",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string)",
+      "prototype": "func OSCSequence(title, body string) string"
+    },
+    {
+      "name": "Render",
+      "file": "internal/notify/notify.go",
+      "line": 152,
+      "params": [
+        {
+          "name": "e",
+          "ts_type": "{ event: string; session_id: string; target: string; agent: string; project: string; branch: string; title: string; subtitle: string; body: string }",
+          "optional": false,
+          "rest": false,
+          "native_type": "Event"
+        }
+      ],
+      "returns": "[string, string]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, string)",
+      "prototype": "func Render(e Event) (title, body string)"
+    },
+    {
+      "name": "Send",
+      "file": "internal/notify/notify.go",
+      "line": 210,
+      "params": [
+        {
+          "name": "e",
+          "ts_type": "{ event: string; session_id: string; target: string; agent: string; project: string; branch: string; title: string; subtitle: string; body: string }",
+          "optional": false,
+          "rest": false,
+          "native_type": "Event"
+        },
+        {
+          "name": "opts",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false,
+          "native_type": "Options"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func Send(e Event, opts Options) error"
+    },
+    {
+      "name": "SendEventJSON",
+      "file": "internal/notify/notify.go",
+      "line": 253,
+      "params": [
+        {
+          "name": "raw",
+          "ts_type": "int[]",
+          "optional": false,
+          "rest": false,
+          "native_type": "[]byte"
+        },
+        {
+          "name": "opts",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false,
+          "native_type": "Options"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func SendEventJSON(raw []byte, opts Options) error"
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

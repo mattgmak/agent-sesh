@@ -1,0 +1,481 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/home/agent/hermes/.hermes/kanban/workspaces/t_5774d5c5/agent-sesh",
+  "unit": "internal/tmux/",
+  "language": "go",
+  "kind": "ffi",
+  "crate_name": "tmux-rs",
+  "exports": [
+    {
+      "name": "PaneTTY",
+      "file": "internal/tmux/agent.go",
+      "line": 34,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func PaneTTY(target string) (string, error)"
+    },
+    {
+      "name": "PaneLocation",
+      "file": "internal/tmux/agent.go",
+      "line": 43,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "[string, string, boolean]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, string, bool)",
+      "prototype": "func PaneLocation(target string) (window, pane string, ok bool)"
+    },
+    {
+      "name": "PanePID",
+      "file": "internal/tmux/agent.go",
+      "line": 56,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "int",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(int, error)",
+      "prototype": "func PanePID(target string) (int, error)"
+    },
+    {
+      "name": "PaneHasPiAgent",
+      "file": "internal/tmux/agent.go",
+      "line": 69,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(bool)",
+      "prototype": "func PaneHasPiAgent(target string) bool"
+    },
+    {
+      "name": "PaneIsSubagent",
+      "file": "internal/tmux/agent.go",
+      "line": 88,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(bool)",
+      "prototype": "func PaneIsSubagent(target string) bool"
+    },
+    {
+      "name": "PaneInfoFor",
+      "file": "internal/tmux/agent.go",
+      "line": 218,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "{ Target: string; PaneID: string; SessionName: string; WindowIndex: string; PaneIndex: string; TTY: string; CurrentCommand: string; StartCommand: string; CurrentPath: string; ShellPID: int; Width: int; Exists: boolean; HasPiAgent: boolean; Agent: string; IsSubagent: boolean }",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(PaneInfo)",
+      "prototype": "func PaneInfoFor(target string) PaneInfo"
+    },
+    {
+      "name": "PaneInfoForOpts",
+      "file": "internal/tmux/agent.go",
+      "line": 223,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        },
+        {
+          "name": "knownPi",
+          "ts_type": "boolean",
+          "optional": false,
+          "rest": false,
+          "native_type": "bool"
+        }
+      ],
+      "returns": "{ Target: string; PaneID: string; SessionName: string; WindowIndex: string; PaneIndex: string; TTY: string; CurrentCommand: string; StartCommand: string; CurrentPath: string; ShellPID: int; Width: int; Exists: boolean; HasPiAgent: boolean; Agent: string; IsSubagent: boolean }",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(PaneInfo)",
+      "prototype": "func PaneInfoForOpts(target string, knownPi bool) PaneInfo"
+    },
+    {
+      "name": "ListPaneIDs",
+      "file": "internal/tmux/agent.go",
+      "line": 294,
+      "params": [],
+      "returns": "string[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "([]string, error)",
+      "prototype": "func ListPaneIDs() ([]string, error)"
+    },
+    {
+      "name": "InvalidateSnapshot",
+      "file": "internal/tmux/snapshot.go",
+      "line": 58,
+      "params": [],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "()",
+      "prototype": "func InvalidateSnapshot()"
+    },
+    {
+      "name": "PaneExists",
+      "file": "internal/tmux/tmux.go",
+      "line": 8,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(bool)",
+      "prototype": "func PaneExists(target string) bool"
+    },
+    {
+      "name": "CapturePane",
+      "file": "internal/tmux/tmux.go",
+      "line": 19,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        },
+        {
+          "name": "lines",
+          "ts_type": "int",
+          "optional": false,
+          "rest": false,
+          "native_type": "int"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func CapturePane(target string, lines int) (string, error)"
+    },
+    {
+      "name": "SwitchClient",
+      "file": "internal/tmux/tmux.go",
+      "line": 65,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func SwitchClient(target string) error"
+    },
+    {
+      "name": "ClientTTYs",
+      "file": "internal/tmux/tmux.go",
+      "line": 79,
+      "params": [],
+      "returns": "string[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "([]string, error)",
+      "prototype": "func ClientTTYs() ([]string, error)"
+    },
+    {
+      "name": "ClientTTY",
+      "file": "internal/tmux/tmux.go",
+      "line": 95,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func ClientTTY(target string) (string, error)"
+    },
+    {
+      "name": "SessionName",
+      "file": "internal/tmux/tmux.go",
+      "line": 114,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func SessionName(target string) (string, error)"
+    },
+    {
+      "name": "PanePath",
+      "file": "internal/tmux/tmux.go",
+      "line": 122,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func PanePath(target string) (string, error)"
+    },
+    {
+      "name": "RenameSession",
+      "file": "internal/tmux/tmux.go",
+      "line": 130,
+      "params": [
+        {
+          "name": "session",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        },
+        {
+          "name": "name",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func RenameSession(session string, name string) error"
+    },
+    {
+      "name": "KillPane",
+      "file": "internal/tmux/tmux.go",
+      "line": 138,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func KillPane(target string) error"
+    },
+    {
+      "name": "KillSession",
+      "file": "internal/tmux/tmux.go",
+      "line": 142,
+      "params": [
+        {
+          "name": "name",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func KillSession(name string) error"
+    },
+    {
+      "name": "NewWindowAtPanePath",
+      "file": "internal/tmux/tmux.go",
+      "line": 146,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func NewWindowAtPanePath(target string) error"
+    },
+    {
+      "name": "ParseTarget",
+      "file": "internal/tmux/tmux.go",
+      "line": 173,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "[unknown, string]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(TargetKind, string)",
+      "prototype": "func ParseTarget(target string) (TargetKind, string)"
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "RegistrySanitizeOptions",
+      "file": "internal/tmux/sanitize.go",
+      "line": 12,
+      "reason": "takes or returns a pointer (`*Snapshot`)"
+    },
+    {
+      "name": "GetSnapshot",
+      "file": "internal/tmux/snapshot.go",
+      "line": 68,
+      "reason": "takes or returns a pointer (`*Snapshot`)"
+    },
+    {
+      "name": "PeekSnapshot",
+      "file": "internal/tmux/snapshot.go",
+      "line": 82,
+      "reason": "takes or returns a pointer (`*Snapshot`)"
+    },
+    {
+      "name": "CachedSnapshot",
+      "file": "internal/tmux/snapshot.go",
+      "line": 204,
+      "reason": "uses `time.Duration` from another package"
+    },
+    {
+      "name": "SaveSnapshot",
+      "file": "internal/tmux/snapshot.go",
+      "line": 228,
+      "reason": "takes or returns a pointer (`*Snapshot`)"
+    }
+  ]
+}

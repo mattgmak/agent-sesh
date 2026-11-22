@@ -1,0 +1,255 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/home/agent/hermes/.hermes/kanban/workspaces/t_5774d5c5/agent-sesh",
+  "unit": "internal/registry/",
+  "language": "go",
+  "kind": "ffi",
+  "crate_name": "registry-rs",
+  "exports": [
+    {
+      "name": "StatusCategory",
+      "file": "internal/registry/category.go",
+      "line": 14,
+      "params": [
+        {
+          "name": "status",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false,
+          "native_type": "Status"
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(Category)",
+      "prototype": "func StatusCategory(status Status) Category"
+    },
+    {
+      "name": "CountByCategory",
+      "file": "internal/registry/category.go",
+      "line": 35,
+      "params": [
+        {
+          "name": "sessions",
+          "ts_type": "unknown[]",
+          "optional": false,
+          "rest": false,
+          "native_type": "[]Session"
+        }
+      ],
+      "returns": "{ attention: int; active: int; idle: int }",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(CategoryCounts)",
+      "prototype": "func CountByCategory(sessions []Session) CategoryCounts"
+    },
+    {
+      "name": "NormalizeStatus",
+      "file": "internal/registry/registry.go",
+      "line": 29,
+      "params": [
+        {
+          "name": "status",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false,
+          "native_type": "Status"
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(Status)",
+      "prototype": "func NormalizeStatus(status Status) Status"
+    },
+    {
+      "name": "DefaultPath",
+      "file": "internal/registry/registry.go",
+      "line": 88,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func DefaultPath() (string, error)"
+    },
+    {
+      "name": "Load",
+      "file": "internal/registry/registry.go",
+      "line": 100,
+      "params": [
+        {
+          "name": "path",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "({ id: string; tmux_target: string; tmux_session: string; tmux_window: string; tmux_pane: string; cwd: string; title: string; pi_session_name: string; last_prompt: string; last_prompt_at: string; branch: string; agent: string; model: string; status: unknown; tool_name: string; updated_at: string; subagents_running: int; bg_jobs_running: int })[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "([]Session, error)",
+      "prototype": "func Load(path string) ([]Session, error)"
+    },
+    {
+      "name": "Save",
+      "file": "internal/registry/registry.go",
+      "line": 131,
+      "params": [
+        {
+          "name": "path",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        },
+        {
+          "name": "sessions",
+          "ts_type": "({ id: string; tmux_target: string; tmux_session: string; tmux_window: string; tmux_pane: string; cwd: string; title: string; pi_session_name: string; last_prompt: string; last_prompt_at: string; branch: string; agent: string; model: string; status: unknown; tool_name: string; updated_at: string; subagents_running: int; bg_jobs_running: int })[]",
+          "optional": false,
+          "rest": false,
+          "native_type": "[]Session"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(error)",
+      "prototype": "func Save(path string, sessions []Session) error"
+    },
+    {
+      "name": "Sanitize",
+      "file": "internal/registry/sanitize.go",
+      "line": 24,
+      "params": [
+        {
+          "name": "sessions",
+          "ts_type": "unknown[]",
+          "optional": false,
+          "rest": false,
+          "native_type": "[]Session"
+        },
+        {
+          "name": "opts",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false,
+          "native_type": "SanitizeOptions"
+        }
+      ],
+      "returns": "[unknown[], ({ Session: unknown; Reason: string })[]]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "([]Session, []PruneReason)",
+      "prototype": "func Sanitize(sessions []Session, opts SanitizeOptions) ([]Session, []PruneReason)"
+    },
+    {
+      "name": "ShouldPersistSanitize",
+      "file": "internal/registry/sanitize.go",
+      "line": 101,
+      "params": [
+        {
+          "name": "before",
+          "ts_type": "unknown[]",
+          "optional": false,
+          "rest": false,
+          "native_type": "[]Session"
+        },
+        {
+          "name": "after",
+          "ts_type": "unknown[]",
+          "optional": false,
+          "rest": false,
+          "native_type": "[]Session"
+        },
+        {
+          "name": "pruned",
+          "ts_type": "({ Session: unknown; Reason: string })[]",
+          "optional": false,
+          "rest": false,
+          "native_type": "[]PruneReason"
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(bool)",
+      "prototype": "func ShouldPersistSanitize(before, after []Session, pruned []PruneReason) bool"
+    },
+    {
+      "name": "StatusPriority",
+      "file": "internal/registry/sort.go",
+      "line": 11,
+      "params": [
+        {
+          "name": "status",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false,
+          "native_type": "Status"
+        }
+      ],
+      "returns": "int",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(int)",
+      "prototype": "func StatusPriority(status Status) int"
+    },
+    {
+      "name": "SortSessions",
+      "file": "internal/registry/sort.go",
+      "line": 37,
+      "params": [
+        {
+          "name": "sessions",
+          "ts_type": "unknown[]",
+          "optional": false,
+          "rest": false,
+          "native_type": "[]Session"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "()",
+      "prototype": "func SortSessions(sessions []Session)"
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "MergeSessions",
+      "file": "internal/registry/merge.go",
+      "line": 10,
+      "reason": "is variadic"
+    },
+    {
+      "name": "PruneMissingPanes",
+      "file": "internal/registry/registry.go",
+      "line": 157,
+      "reason": "takes or returns a function"
+    }
+  ]
+}

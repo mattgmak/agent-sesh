@@ -1,0 +1,99 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/home/agent/hermes/.hermes/kanban/workspaces/t_5774d5c5/agent-sesh",
+  "unit": "internal/prof/",
+  "language": "go",
+  "kind": "ffi",
+  "crate_name": "prof-rs",
+  "exports": [
+    {
+      "name": "Init",
+      "file": "internal/prof/prof.go",
+      "line": 42,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func Init() (string, error)"
+    },
+    {
+      "name": "Close",
+      "file": "internal/prof/prof.go",
+      "line": 78,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string)",
+      "prototype": "func Close() string"
+    },
+    {
+      "name": "Note",
+      "file": "internal/prof/prof.go",
+      "line": 112,
+      "params": [
+        {
+          "name": "name",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        },
+        {
+          "name": "detail",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "()",
+      "prototype": "func Note(name, detail string)"
+    },
+    {
+      "name": "StartCPUProfile",
+      "file": "internal/prof/prof.go",
+      "line": 121,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func StartCPUProfile() (string, error)"
+    },
+    {
+      "name": "StopCPUProfile",
+      "file": "internal/prof/prof.go",
+      "line": 157,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string)",
+      "prototype": "func StopCPUProfile() string"
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "Start",
+      "file": "internal/prof/prof.go",
+      "line": 99,
+      "reason": "takes or returns a function"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/home/agent/hermes/.hermes/kanban/workspaces/t_5774d5c5/agent-sesh",
+  "unit": "internal/config/",
+  "language": "go",
+  "kind": "ffi",
+  "crate_name": "config-rs",
+  "exports": [
+    {
+      "name": "Path",
+      "file": "internal/config/config.go",
+      "line": 86,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string)",
+      "prototype": "func Path() string"
+    },
+    {
+      "name": "Load",
+      "file": "internal/config/config.go",
+      "line": 107,
+      "params": [],
+      "returns": "{ version: int; agents: string[]; notify: unknown; daemon: unknown }",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(Config)",
+      "prototype": "func Load() Config"
+    },
+    {
+      "name": "Agents",
+      "file": "internal/config/config.go",
+      "line": 131,
+      "params": [],
+      "returns": "string[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "([]string)",
+      "prototype": "func Agents() []string"
+    },
+    {
+      "name": "IsAgent",
+      "file": "internal/config/config.go",
+      "line": 146,
+      "params": [
+        {
+          "name": "name",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(bool)",
+      "prototype": "func IsAgent(name string) bool"
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

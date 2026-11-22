@@ -1,0 +1,4 @@
+bin.name = "agent-sesh"
+args = ["debug", "registry"]
+status.code = 0
+fs.sandbox = true

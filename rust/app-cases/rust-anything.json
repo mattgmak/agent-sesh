@@ -1,0 +1,9 @@
+{
+  "schema": "rust-anything/app-cases@1",
+  "name": "agent-sesh",
+  "run": [
+    "sh",
+    "/home/agent/hermes/.hermes/kanban/workspaces/t_5774d5c5/rec-env/run.sh"
+  ],
+  "timeout_secs": 30
+}

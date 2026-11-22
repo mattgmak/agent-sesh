@@ -1,0 +1,4 @@
+bin.name = "agent-sesh"
+args = ["debug", "pane", "İstanbul"]
+status.code = 0
+fs.sandbox = true

@@ -1,0 +1,1 @@
+{"fn":"ListPaneIDs","args":[],"actual":{"ok":["%0","%1","%2"]},"reason":"error path only reachable when no tmux server is running; on the live fixture it returns the pane list"}

@@ -1,0 +1,4 @@
+bin.name = "agent-sesh"
+args = ["api", "👨‍👩‍👧 family"]
+status.code = 1
+fs.sandbox = true

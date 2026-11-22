@@ -1,0 +1,17 @@
+{
+  "Target": "日本語",
+  "PaneID": "",
+  "SessionName": "",
+  "WindowIndex": "",
+  "PaneIndex": "",
+  "TTY": "",
+  "CurrentCommand": "",
+  "StartCommand": "",
+  "CurrentPath": "",
+  "ShellPID": 0,
+  "Width": 0,
+  "Exists": false,
+  "HasPiAgent": false,
+  "Agent": "",
+  "IsSubagent": false
+}

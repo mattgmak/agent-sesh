@@ -1,0 +1,1 @@
+usage: agent-sesh debug <registry|validate|panes|discover|pane <target>>

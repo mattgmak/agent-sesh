@@ -1,0 +1,4 @@
+bin.name = "agent-sesh"
+args = ["preview", "%1"]
+status.code = 0
+fs.sandbox = true

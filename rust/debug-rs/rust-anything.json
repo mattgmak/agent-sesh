@@ -1,0 +1,85 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/home/agent/hermes/.hermes/kanban/workspaces/t_5774d5c5/agent-sesh",
+  "unit": "internal/debug/",
+  "language": "go",
+  "kind": "ffi",
+  "crate_name": "debug-rs",
+  "exports": [
+    {
+      "name": "Registry",
+      "file": "internal/debug/debug.go",
+      "line": 19,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func Registry() (string, error)"
+    },
+    {
+      "name": "Validate",
+      "file": "internal/debug/debug.go",
+      "line": 36,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func Validate() (string, error)"
+    },
+    {
+      "name": "Panes",
+      "file": "internal/debug/debug.go",
+      "line": 87,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func Panes() (string, error)"
+    },
+    {
+      "name": "Pane",
+      "file": "internal/debug/debug.go",
+      "line": 118,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false,
+          "native_type": "string"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func Pane(target string) (string, error)"
+    },
+    {
+      "name": "Discover",
+      "file": "internal/debug/debug.go",
+      "line": 128,
+      "params": [],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false,
+      "native_return": "(string, error)",
+      "prototype": "func Discover() (string, error)"
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

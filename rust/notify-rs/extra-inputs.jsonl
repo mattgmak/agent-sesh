@@ -1,0 +1,3 @@
+{"fn":"Send","args":[{"event":"done","session_id":"abc123","target":"","agent":"","project":"","branch":"","title":"t","subtitle":"","body":"b"},{"Backend":"pager","TTY":"","Command":""}]}
+{"fn":"Send","args":[{"event":"done","session_id":"abc123","target":"","agent":"","project":"","branch":"","title":"t","subtitle":"","body":"b"},{"Backend":"command","TTY":"","Command":""}]}
+{"fn":"Send","args":[{"event":"","session_id":"","target":"","agent":"","project":"","branch":"","title":"","subtitle":"","body":""},{"Backend":"bogus","TTY":"","Command":"echo hi"}]}
